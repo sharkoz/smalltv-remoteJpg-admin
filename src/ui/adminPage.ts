@@ -85,7 +85,7 @@ export function adminPage(): string {
           <div class="form-mode"><span id="device-mode">New device</span><button type="button" class="btn" id="device-new">New</button></div>
           <div class="row">
             <label>Name<input name="name" required placeholder="Kitchen"></label>
-            <label>Poll interval (ms)<input name="poll" type="number" value="5000" required></label>
+            <label>Poll interval (s)<input name="poll" type="number" step="0.1" value="5" required></label>
           </div>
           <div>
             <div class="meta">Rotation (dashboards shown in order)</div>
@@ -107,7 +107,7 @@ export function adminPage(): string {
           <label>Name<input name="name" required placeholder="Paris Clock"></label>
           <div class="row">
             <label>Plugin<select name="pluginId" id="plugin-select"></select></label>
-            <label>Display duration (ms)<input name="duration" type="number" value="10000" required></label>
+            <label>Display duration (s)<input name="duration" type="number" step="0.1" value="10" required></label>
           </div>
           <div class="config-head">
             <span>Configuration</span>
@@ -157,6 +157,13 @@ export function adminPage(): string {
   }
   // Access a named form control safely (form.id/form.name resolve to element props, not controls).
   function fld(form, name) { return form.elements.namedItem(name); }
+  function msToSeconds(ms) { return Number(ms) / 1000; }
+  function secondsToMs(seconds) { return Math.round(Number(seconds) * 1000); }
+  function fmtSeconds(ms) {
+    var sec = msToSeconds(ms);
+    if (!Number.isFinite(sec)) return '0';
+    return (Math.round(sec * 1000) / 1000).toString();
+  }
   function authed(r) { if (r.status === 401) { location.href = '/login'; throw new Error('auth'); } return r; }
   function jget(u) { return fetch(u).then(authed).then(function (r) { return r.json(); }); }
   function jsend(method, u, body) {
@@ -180,7 +187,7 @@ export function adminPage(): string {
       var tags = (p.dataSources || []).map(function (d) { return el('span', { class: 'tag' }, ['data: ' + d.id]); });
       list.appendChild(el('div', { class: 'card' }, [
         el('h3', null, [p.name]),
-        el('div', { class: 'meta' }, ['default ' + p.defaultDisplayDurationMs + 'ms'])
+        el('div', { class: 'meta' }, ['default ' + fmtSeconds(p.defaultDisplayDurationMs) + 's'])
       ].concat(tags)));
     });
     var sel = document.getElementById('plugin-select');
@@ -261,7 +268,7 @@ export function adminPage(): string {
     renderConfigForm(pid, defaults);
     document.getElementById('config-text').value = JSON.stringify(defaults, null, 2);
     var p = pluginById(pid), dur = fld(dashboardForm(), 'duration');
-    if (p && p.defaultDisplayDurationMs) dur.value = p.defaultDisplayDurationMs;
+    if (p && p.defaultDisplayDurationMs) dur.value = fmtSeconds(p.defaultDisplayDurationMs);
     setConfigMode(pluginConfigFields(pid).length ? 'form' : 'json');
   }
 
@@ -272,7 +279,7 @@ export function adminPage(): string {
       var pname = (pluginById(d.pluginId) || {}).name || d.pluginId;
       list.appendChild(el('div', { class: 'card' }, [
         el('h3', null, [d.name]),
-        el('div', { class: 'meta' }, [pname + ' · ' + d.displayDurationMs + 'ms']),
+        el('div', { class: 'meta' }, [pname + ' · ' + fmtSeconds(d.displayDurationMs) + 's']),
         el('img', { src: bust('/admin/dashboards/' + d.id + '/preview.jpg'), alt: d.name }),
         el('div', { class: 'row' }, [
           el('button', { class: 'btn', onclick: function () { editDashboard(d); } }, ['Edit']),
@@ -289,7 +296,7 @@ export function adminPage(): string {
     openForm(f);
     fld(f, 'name').value = d.name;
     fld(f, 'pluginId').value = d.pluginId;
-    fld(f, 'duration').value = d.displayDurationMs;
+    fld(f, 'duration').value = fmtSeconds(d.displayDurationMs);
     renderConfigForm(d.pluginId, d.config || {});
     document.getElementById('config-text').value = JSON.stringify(d.config || {}, null, 2);
     setConfigMode(pluginConfigFields(d.pluginId).length ? 'form' : 'json');
@@ -324,11 +331,11 @@ export function adminPage(): string {
     state.devices.forEach(function (dev) {
       var slots = (dev.assignments || []).map(function (a) {
         var dn = (state.dashboards.find(function (x) { return x.id === a.dashboardId; }) || {}).name || a.dashboardId;
-        return el('span', { class: 'tag' }, [dn + ' (' + a.displayDurationMs + 'ms)']);
+        return el('span', { class: 'tag' }, [dn + ' (' + fmtSeconds(a.displayDurationMs) + 's)']);
       });
       list.appendChild(el('div', { class: 'card' }, [
         el('h3', null, [dev.name]),
-        el('div', { class: 'meta' }, ['polls every ' + dev.pollIntervalMs + 'ms']),
+        el('div', { class: 'meta' }, ['polls every ' + fmtSeconds(dev.pollIntervalMs) + 's']),
         el('img', { src: bust('/devices/' + dev.id + '/screen.jpg'), alt: dev.name, 'data-dev': dev.id }),
         el('div', null, slots),
         el('div', { class: 'row', style: 'margin-top:10px' }, [
@@ -351,7 +358,7 @@ export function adminPage(): string {
   function assignRow(dashboardId, duration) {
     var row = el('div', { class: 'assign-row' }, []);
     var sel = dashboardOptions(dashboardId);
-    var dur = el('input', { type: 'number', value: duration || 10000, class: 'assign-dur' });
+    var dur = el('input', { type: 'number', value: duration ? fmtSeconds(duration) : 10, class: 'assign-dur', step: '0.1' });
     var rm = el('button', { type: 'button', class: 'danger', onclick: function () { row.remove(); } }, ['×']);
     row.appendChild(sel); row.appendChild(dur); row.appendChild(rm);
     return row;
@@ -363,7 +370,7 @@ export function adminPage(): string {
     document.getElementById('device-mode').textContent = 'Editing: ' + dev.name;
     openForm(f);
     fld(f, 'name').value = dev.name;
-    fld(f, 'poll').value = dev.pollIntervalMs;
+    fld(f, 'poll').value = fmtSeconds(dev.pollIntervalMs);
     document.getElementById('assignments').innerHTML = '';
     (dev.assignments || []).forEach(function (a) { addAssign(a.dashboardId, a.displayDurationMs); });
     f.scrollIntoView({ behavior: 'smooth' });
@@ -373,7 +380,7 @@ export function adminPage(): string {
     editingDeviceId = null;
     document.getElementById('device-mode').textContent = 'New device';
     fld(f, 'name').value = '';
-    fld(f, 'poll').value = 5000;
+    fld(f, 'poll').value = 5;
     document.getElementById('assignments').innerHTML = '';
     openForm(f);
   }
@@ -449,9 +456,12 @@ export function adminPage(): string {
       e.preventDefault();
       var f = e.target, msg = document.getElementById('device-msg');
       var assignments = Array.prototype.map.call(document.querySelectorAll('#assignments .assign-row'), function (row) {
-        return { dashboardId: row.querySelector('.assign-dash').value, displayDurationMs: Number(row.querySelector('.assign-dur').value) };
+        return {
+          dashboardId: row.querySelector('.assign-dash').value,
+          displayDurationMs: secondsToMs(row.querySelector('.assign-dur').value),
+        };
       });
-      var body = { name: fld(f, 'name').value.trim(), pollIntervalMs: Number(fld(f, 'poll').value), assignments: assignments };
+      var body = { name: fld(f, 'name').value.trim(), pollIntervalMs: secondsToMs(fld(f, 'poll').value), assignments: assignments };
       if (editingDeviceId) body.id = editingDeviceId;
       jsend('POST', '/admin/devices', body).then(function (r) { return r.json().then(function (j) { return { r: r, j: j }; }); })
         .then(function (o) {
@@ -470,7 +480,12 @@ export function adminPage(): string {
       var config;
       try { config = currentConfig(); }
       catch (err) { msg.className = 'msg err'; msg.textContent = 'Config is not valid JSON'; return; }
-      var body = { name: fld(f, 'name').value.trim(), pluginId: fld(f, 'pluginId').value, config: config, displayDurationMs: Number(fld(f, 'duration').value) };
+      var body = {
+        name: fld(f, 'name').value.trim(),
+        pluginId: fld(f, 'pluginId').value,
+        config: config,
+        displayDurationMs: secondsToMs(fld(f, 'duration').value),
+      };
       if (editingDashboardId) body.id = editingDashboardId;
       jsend('POST', '/admin/dashboards', body).then(function (r) { return r.json().then(function (j) { return { r: r, j: j }; }); })
         .then(function (o) {

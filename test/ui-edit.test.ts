@@ -113,11 +113,11 @@ describe.skipIf(!available)('admin UI — Edit buttons (real browser)', () => {
     // The id is hidden/managed; the form shows an "Editing: <name>" mode header instead.
     expect(await page.locator('#device-mode').textContent()).toBe('Editing: Kitchen');
     expect(await page.inputValue('#device-form [name="name"]')).toBe('Kitchen');
-    expect(await page.inputValue('#device-form [name="poll"]')).toBe('2000');
+    expect(await page.inputValue('#device-form [name="poll"]')).toBe('2');
 
     expect(await page.locator('#assignments .assign-row').count()).toBe(2);
     expect(await page.locator('#assignments .assign-row').first().locator('.assign-dash').inputValue()).toBe('clock-paris');
-    expect(await page.locator('#assignments .assign-row').first().locator('.assign-dur').inputValue()).toBe('10000');
+    expect(await page.locator('#assignments .assign-row').first().locator('.assign-dur').inputValue()).toBe('10');
   });
 
   it('Edit on a dashboard opens the friendly config form populated from the plugin schema', async () => {
