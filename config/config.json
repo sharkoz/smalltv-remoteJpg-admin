@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "devices": [
+    {
+      "id": "kitchen-tv",
+      "name": "Kitchen SmallTV",
+      "pollIntervalMs": 5000,
+      "assignments": [
+        {
+          "dashboardId": "clock-paris",
+          "displayDurationMs": 1000
+        },
+        {
+          "dashboardId": "clock-tokyo",
+          "displayDurationMs": 1000
+        },
+        {
+          "dashboardId": "usd-eur",
+          "displayDurationMs": 1500
+        }
+      ]
+    }
+  ],
+  "dashboards": [
+    {
+      "id": "clock-paris",
+      "pluginId": "clock",
+      "name": "Paris Clock",
+      "config": {
+        "timezone": "Europe/Paris",
+        "format24h": true,
+        "label": "PARIS"
+      },
+      "displayDurationMs": 10000
+    },
+    {
+      "id": "clock-tokyo",
+      "pluginId": "clock",
+      "name": "Tokyo Clock",
+      "config": {
+        "timezone": "Asia/Tokyo",
+        "format24h": true,
+        "label": "TOKYO"
+      },
+      "displayDurationMs": 10000
+    },
+    {
+      "id": "usd-eur",
+      "pluginId": "api-value",
+      "name": "USD to EUR",
+      "config": {
+        "url": "https://api.frankfurter.app/latest?from=USD&to=EUR",
+        "jsonPath": "rates.EUR",
+        "label": "USD - EUR",
+        "unit": "EUR per USD"
+      },
+      "displayDurationMs": 15000
+    }
+  ]
+}

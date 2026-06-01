@@ -1,0 +1,36 @@
+{
+  "name": "smalltv-screens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted dashboard server for SmallTV-style 240x240 IoT screens that poll a JPG endpoint",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "dev:poll": "node scripts/dev-poll.mjs",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "set-password": "tsx src/cli/set-password.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^8.3.1",
+    "chokidar": "^3.6.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.28.1",
+    "playwright": "^1.48.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "@types/ws": "^8.5.12",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1",
+    "ws": "^8.18.0"
+  }
+}

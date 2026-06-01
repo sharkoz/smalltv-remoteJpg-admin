@@ -1,0 +1,20 @@
+{
+  "sessionSecret": "change-me-to-a-long-random-string",
+  "sessionTtlMs": 604800000,
+  "cookieSecure": false,
+  "users": [
+    { "username": "admin", "passwordHash": "<generate with: npm run set-password -- admin <password>>" }
+  ],
+  "oauth2": {
+    "enabled": false,
+    "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+    "tokenUrl": "https://oauth2.googleapis.com/token",
+    "userInfoUrl": "https://openidconnect.googleapis.com/v1/userinfo",
+    "clientId": "your-client-id",
+    "clientSecret": "your-client-secret (or set OAUTH2_CLIENT_SECRET env)",
+    "scopes": ["openid", "email"],
+    "emailField": "email",
+    "allowedEmails": ["you@example.com"],
+    "buttonLabel": "Sign in with Google"
+  }
+}

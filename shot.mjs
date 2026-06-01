@@ -1,0 +1,13 @@
+import { chromium } from 'playwright';
+const base = 'http://127.0.0.1:8096';
+const b = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const p = await b.newPage({ viewport: { width: 1100, height: 820 } });
+await p.goto(base + '/login', { waitUntil: 'networkidle' });
+await p.screenshot({ path: '/tmp/login.png' });
+await p.fill('input[name=username]', 'admin');
+await p.fill('input[name=password]', 'secret123');
+await Promise.all([p.waitForURL('**/admin/ui'), p.click('button[type=submit]')]);
+await p.waitForTimeout(1500);
+await p.screenshot({ path: '/tmp/admin.png', fullPage: true });
+await b.close();
+console.log('screenshots saved');
