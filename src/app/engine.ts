@@ -144,7 +144,10 @@ export class Engine {
     let changed = false;
     for (const decl of decls) {
       const snap = this.deps.dataCache.snapshot(dashboardId, decl.id);
-      const due = snap.fetchedAt == null || this.clock.nowMs() - snap.fetchedAt >= decl.refreshIntervalMs;
+      const due =
+        !this.deps.dataCache.matchesRequest(dashboardId, decl, resolve) ||
+        snap.fetchedAt == null ||
+        this.clock.nowMs() - snap.fetchedAt >= decl.refreshIntervalMs;
       if (!due) continue;
       if (await this.deps.dataCache.refresh(dashboardId, decl, resolve)) changed = true;
       const after = this.deps.dataCache.snapshot(dashboardId, decl.id);

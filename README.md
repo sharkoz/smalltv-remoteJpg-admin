@@ -153,6 +153,22 @@ Data-source `url` and `headers` support these placeholders, resolved per render:
     "rangeSeconds": 3600, "step": 60, "label": "CPU", "unit": "%", "color": "#4f9eff" }
   ```
   Degrades to a "no data" card if the query returns nothing or the server is unreachable.
+- **stocks** — shows a stock or crypto quote from Yahoo Finance, with current
+  price, percentage change, a sparkline over `rangeDays`, and a logo. Config:
+  `symbol` (`AAPL`, `MC.PA`, `BTC-USD`, `ETH-USD`), `assetType`, `rangeDays`,
+  `interval`, `label`, `logoUrl`, `color`, `decimals`. `logoUrl` is optional;
+  when omitted, the plugin displays a symbol monogram. Example crypto config:
+  ```json
+  { "assetType": "crypto", "symbol": "BTC-USD", "label": "Bitcoin",
+    "logoUrl": "https://cryptologos.cc/logos/bitcoin-btc-logo.svg?v=040",
+    "rangeDays": 30, "interval": "1d", "color": "#f7931a", "decimals": 0 }
+  ```
+  Example stock config:
+  ```json
+  { "assetType": "stock", "symbol": "AAPL", "label": "Apple",
+    "logoUrl": "https://logo.clearbit.com/apple.com",
+    "rangeDays": 30, "interval": "1d", "color": "#36d399", "decimals": 2 }
+  ```
 
 ## Admin API
 

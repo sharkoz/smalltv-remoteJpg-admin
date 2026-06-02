@@ -176,6 +176,8 @@ export function adminPage(): string {
 
   function bust(u) { return u + '?t=' + Date.now(); }
   function pluginById(id) { return state.plugins.find(function (p) { return p.id === id; }); }
+  function dashboardById(id) { return state.dashboards.find(function (d) { return d.id === id; }); }
+  function durationForDashboard(id) { var d = dashboardById(id); return d ? d.displayDurationMs : 10000; }
   function dashboardForm() { return document.getElementById('dashboard-form'); }
   function deviceForm() { return document.getElementById('device-form'); }
   function openForm(form) { var d = form.closest('details'); if (d) d.open = true; }
@@ -358,7 +360,8 @@ export function adminPage(): string {
   function assignRow(dashboardId, duration) {
     var row = el('div', { class: 'assign-row' }, []);
     var sel = dashboardOptions(dashboardId);
-    var dur = el('input', { type: 'number', value: duration ? fmtSeconds(duration) : 10, class: 'assign-dur', step: '0.1' });
+    var dur = el('input', { type: 'number', value: fmtSeconds(duration || durationForDashboard(sel.value)), class: 'assign-dur', step: '0.1', title: 'Duration (s)', placeholder: 'duration (s)' });
+    sel.addEventListener('change', function () { dur.value = fmtSeconds(durationForDashboard(sel.value)); });
     var rm = el('button', { type: 'button', class: 'danger', onclick: function () { row.remove(); } }, ['×']);
     row.appendChild(sel); row.appendChild(dur); row.appendChild(rm);
     return row;

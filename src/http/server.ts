@@ -149,7 +149,21 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     } catch (err) {
       return reply.code(400).send({ error: String(err instanceof Error ? err.message : err) });
     }
+    const previous = store.getDashboard(dashboard.id);
     store.upsertDashboard(dashboard);
+    if (previous && previous.displayDurationMs !== dashboard.displayDurationMs) {
+      for (const device of store.getDevices()) {
+        let changed = false;
+        const assignments = device.assignments.map((assignment) => {
+          if (assignment.dashboardId !== dashboard.id || assignment.displayDurationMs !== previous.displayDurationMs) {
+            return assignment;
+          }
+          changed = true;
+          return { ...assignment, displayDurationMs: dashboard.displayDurationMs };
+        });
+        if (changed) store.upsertDevice({ ...device, assignments });
+      }
+    }
     return reply.code(201).send({ dashboard });
   });
 
