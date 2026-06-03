@@ -43,12 +43,13 @@ export const manifest: PluginManifest = {
 
 export const render: RenderFn = (ctx) => {
   const cfg = configSchema.parse(ctx.config);
+  const theme = ctx.theme;
   return ctx.brick.screen(
     ctx.brick.stack([
-      cfg.label ? ctx.brick.text({ content: cfg.label, size: 18, color: '#9aa7b4' }) : '',
-      ctx.brick.value({ source: 'main', path: cfg.jsonPath, size: 48, fallback: '—' }),
-      cfg.unit ? ctx.brick.text({ content: cfg.unit, size: 16, color: '#9aa7b4' }) : '',
+      cfg.label ? ctx.brick.text({ content: cfg.label, size: 18, color: theme.muted }) : '',
+      ctx.brick.value({ source: 'main', path: cfg.jsonPath, size: 48, fallback: '—', color: theme.text }),
+      cfg.unit ? ctx.brick.text({ content: cfg.unit, size: 16, color: theme.muted }) : '',
     ]),
-    { bg: '#10151c' },
+    { bg: theme.bg, color: theme.text, font: theme.font },
   );
 };

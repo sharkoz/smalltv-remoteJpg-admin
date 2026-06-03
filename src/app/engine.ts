@@ -13,6 +13,8 @@ import { makeBricks, wrapFragmentIfNeeded } from '../plugins/brick.js';
 import { computeCurrent, nextDashboardId, type RotationSlot } from '../rotation/scheduler.js';
 import { logger } from '../util/logger.js';
 import { LogStore } from '../log/logStore.js';
+import { DEFAULT_THEME_NAME, getTheme, type ThemeName } from '../theme/palette.js';
+import type { Device } from '../domain/types.js';
 
 export interface EngineDeps {
   store: ConfigStore;
@@ -60,13 +62,28 @@ export class Engine {
 
   /** Build a placeholder image used when a device has no (valid) dashboard to show. */
   private async placeholder(message: string): Promise<Buffer> {
+    const theme = getTheme(DEFAULT_THEME_NAME);
     const bricks = makeBricks({});
-    const html = bricks.screen(bricks.text({ content: message, size: 18, color: '#888' }), { bg: '#000' });
+    const html = bricks.screen(bricks.text({ content: message, size: 18, color: theme.muted }), { bg: theme.bg, color: theme.text, font: theme.font });
     return this.deps.renderer.renderHtmlToJpg(html);
   }
 
+  private themeNameFor(dashboard: Dashboard | undefined, device?: Device): ThemeName {
+    return getTheme(dashboard?.theme ?? device?.theme ?? DEFAULT_THEME_NAME).name;
+  }
+
+  private imageKey(dashboardId: string, themeName: string): string {
+    return `${dashboardId}::theme:${themeName}`;
+  }
+
   /** Render one dashboard to a JPG and cache it. Returns null if the dashboard or its plugin is missing. */
-  async renderDashboardNow(dashboardId: string): Promise<Buffer | null> {
+  async renderDashboardNow(dashboardId: string, themeName?: ThemeName): Promise<Buffer | null> {
+    const dashboard = this.deps.store.getDashboard(dashboardId);
+    const resolvedThemeName = themeName ?? this.themeNameFor(dashboard);
+    return this.renderDashboardWithTheme(dashboardId, resolvedThemeName, this.imageKey(dashboardId, resolvedThemeName));
+  }
+
+  private async renderDashboardWithTheme(dashboardId: string, themeName: ThemeName, cacheKey: string): Promise<Buffer | null> {
     const dashboard = this.deps.store.getDashboard(dashboardId);
     if (!dashboard) {
       logger.warn('Render requested for unknown dashboard', { dashboardId });
@@ -76,7 +93,7 @@ export class Engine {
     if (!plugin) {
       this.logs.add('error', 'render', `Unknown plugin "${dashboard.pluginId}"`, { dashboardId });
       const jpg = await this.placeholder(`Missing plugin:\n${dashboard.pluginId}`);
-      this.deps.imageCache.set(dashboardId, jpg);
+      this.deps.imageCache.set(cacheKey, jpg);
       return jpg;
     }
 
@@ -91,6 +108,7 @@ export class Engine {
       data,
       now: this.clock.now(),
       brick: makeBricks(data),
+      theme: getTheme(themeName),
       log: this.logs.scoped('plugin', dashboardId),
     };
 
@@ -102,7 +120,7 @@ export class Engine {
       this.logs.add('error', 'render', `Render failed for "${dashboard.name}"`, { dashboardId, meta: { error: String(err) } });
       jpg = await this.placeholder(`Render error:\n${dashboard.name}`);
     }
-    this.deps.imageCache.set(dashboardId, jpg);
+    this.deps.imageCache.set(cacheKey, jpg);
     return jpg;
   }
 
@@ -117,10 +135,13 @@ export class Engine {
       return { dashboardId: '', jpg: await this.placeholder('No dashboards assigned') };
     }
 
-    const cached = this.deps.imageCache.get(dashboardId);
+    const dashboard = this.deps.store.getDashboard(dashboardId);
+    const themeName = this.themeNameFor(dashboard, device);
+    const cacheKey = this.imageKey(dashboardId, themeName);
+    const cached = this.deps.imageCache.get(cacheKey);
     if (cached) return { dashboardId, jpg: cached.jpg };
 
-    const jpg = await this.renderDashboardNow(dashboardId);
+    const jpg = await this.renderDashboardWithTheme(dashboardId, themeName, cacheKey);
     return { dashboardId, jpg: jpg ?? (await this.placeholder('Dashboard unavailable')) };
   }
 
@@ -172,13 +193,13 @@ export class Engine {
     return ids;
   }
 
-  private needsRerender(dashboardId: string): boolean {
+  private needsRerender(dashboardId: string, cacheKey: string): boolean {
     const dashboard = this.deps.store.getDashboard(dashboardId);
     if (!dashboard) return false;
-    if (!this.deps.imageCache.has(dashboardId)) return true;
+    if (!this.deps.imageCache.has(cacheKey)) return true;
     const plugin = this.deps.registry.get(dashboard.pluginId);
     const rer = plugin?.manifest.rerenderIntervalMs;
-    return rer != null && this.deps.imageCache.ageMs(dashboardId) >= rer;
+    return rer != null && this.deps.imageCache.ageMs(cacheKey) >= rer;
   }
 
   /**
@@ -199,17 +220,20 @@ export class Engine {
     }
 
     // 2. Pre-render current + next per device.
-    const toRender = new Set<string>();
+    const toRender = new Map<string, { dashboardId: string; themeName: ThemeName }>();
     for (const device of this.deps.store.getDevices()) {
       const slots = this.slotsForDevice(device.id);
       const cur = computeCurrent(slots, this.clock.nowMs()).dashboardId;
       const next = nextDashboardId(slots, this.clock.nowMs());
-      if (cur) toRender.add(cur);
-      if (next) toRender.add(next);
+      for (const dashboardId of [cur, next]) {
+        if (!dashboardId) continue;
+        const themeName = this.themeNameFor(this.deps.store.getDashboard(dashboardId), device);
+        toRender.set(this.imageKey(dashboardId, themeName), { dashboardId, themeName });
+      }
     }
-    for (const dashboardId of toRender) {
-      if (this.needsRerender(dashboardId)) {
-        await this.renderDashboardNow(dashboardId);
+    for (const [cacheKey, item] of toRender) {
+      if (this.needsRerender(item.dashboardId, cacheKey)) {
+        await this.renderDashboardWithTheme(item.dashboardId, item.themeName, cacheKey);
       }
     }
   }

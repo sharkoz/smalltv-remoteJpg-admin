@@ -82,11 +82,17 @@ Sessions are stateless signed cookies (HMAC); passwords are hashed with scrypt �
       "config": { "timezone": "Europe/Paris", "label": "PARIS" }, "displayDurationMs": 10000 }
   ],
   "devices": [
-    { "id": "kitchen-tv", "name": "Kitchen", "pollIntervalMs": 5000,
+    { "id": "kitchen-tv", "name": "Kitchen", "theme": "dark", "pollIntervalMs": 5000,
       "assignments": [{ "dashboardId": "clock-paris", "displayDurationMs": 10000 }] }
   ]
 }
 ```
+
+Each device has a `theme`, and each dashboard may optionally force its own
+`theme`. Priority is: dashboard override, then device theme, then the technical
+fallback `dark`. Available themes: `dark`, `black` (pure AMOLED-style black),
+`light`, `terminal` (green monochrome). Themes intentionally use simple flat
+colors (no gradients) to keep JPEG compression artifacts low on small graphs.
 
 **Secrets** are never stored in config. Reference them in a plugin's data-source URL/headers as `{{secret.name}}` and provide the value via env (`SECRET_NAME`) or `config/secrets.json` (gitignored).
 
@@ -115,9 +121,10 @@ export const render: RenderFn = (ctx) => {
   const cfg = configSchema.parse(ctx.config);
   return ctx.brick.screen(
     ctx.brick.stack([
-      ctx.brick.text({ content: cfg.label, size: 18 }),
-      ctx.brick.value({ source: 'main', path: 'price', fallback: '—' }),
+      ctx.brick.text({ content: cfg.label, size: 18, color: ctx.theme.muted }),
+      ctx.brick.value({ source: 'main', path: 'price', fallback: '—', color: ctx.theme.text }),
     ]),
+    { bg: ctx.theme.bg, color: ctx.theme.text },
   );
 };
 ```
@@ -125,6 +132,9 @@ export const render: RenderFn = (ctx) => {
 - `render` returns an HTML document (or a fragment, auto-wrapped to 240×240).
 - `ctx.data[sourceId]` holds the resolved fetch result (`ok`, `value`, `stale`, `error`).
 - `ctx.now` is an injected clock — use it instead of `new Date()`.
+- `ctx.theme` is the global palette selected by `config.theme` (`bg`, `surface`,
+  `border`, `text`, `muted`, `accent`, `good`, `bad`, `warn`). Use it for visual
+  consistency across plugins.
 - `ctx.log.{debug,info,warn,error}(msg, meta?)` emits diagnostics that show up per-dashboard in the admin **Logs** panel — use it to explain fallbacks/empty states.
 - **Bricks** (`text`, `value`, `stack`, `row`, `screen`) are reusable HTML-emitting units; the same brick layer is what a future visual builder will target, so code plugins and the builder share one rendering substrate.
 

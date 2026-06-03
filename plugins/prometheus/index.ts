@@ -78,24 +78,21 @@ function sparkline(points: number[], color: string): string {
     return [x, y] as const;
   });
   const line = coords.map((c) => `${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(' ');
-  const first = coords[0]!;
-  const last = coords[coords.length - 1]!;
-  const area = `${first[0].toFixed(1)},${(H - P).toFixed(1)} ${line} ${last[0].toFixed(1)},${(H - P).toFixed(1)}`;
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <polygon points="${area}" fill="${color}" fill-opacity="0.15"/>
     <polyline points="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
   </svg>`;
 }
 
 export const render: RenderFn = (ctx: RenderContext) => {
   const cfg = configSchema.parse(ctx.config);
+  const theme = ctx.theme;
   const series = ctx.data.series;
-  const header = cfg.label ? ctx.brick.text({ content: cfg.label, size: 16, color: '#9aa7b4' }) : '';
+  const header = cfg.label ? ctx.brick.text({ content: cfg.label, size: 16, color: theme.muted }) : '';
 
   const noData = (caption = 'no data') =>
     ctx.brick.screen(
       ctx.brick.stack([header, ctx.brick.text({ content: caption, size: 24, color: '#7f93b5' })]),
-      { bg: '#0c121d' },
+      { bg: theme.bg, color: theme.text, font: theme.font },
     );
 
   // Diagnose, step by step, and log the precise reason for "no data".
@@ -129,7 +126,7 @@ export const render: RenderFn = (ctx: RenderContext) => {
   const last = points[points.length - 1]!;
   const valueText = ctx.brick.text({ content: last.toFixed(cfg.decimals) + (cfg.unit ? ' ' + cfg.unit : ''), size: 30, weight: 700 });
   const staleDot = series && series.stale
-    ? '<div style="position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:#e0a000"></div>'
+    ? `<div style="position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:${theme.warn}"></div>`
     : '';
 
   return ctx.brick.screen(
@@ -138,6 +135,6 @@ export const render: RenderFn = (ctx: RenderContext) => {
       ctx.brick.stack([header, valueText], { gap: 2 }),
       sparkline(points, cfg.color),
     ],
-    { bg: '#0c121d', padding: 6 },
+    { bg: theme.bg, color: theme.text, padding: 6, font: theme.font },
   );
 };

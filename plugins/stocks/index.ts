@@ -93,12 +93,12 @@ function extractChart(value: unknown) {
   return { error: raw.chart?.error, points, last, previous, currency };
 }
 
-function logoHtml(cfg: z.infer<typeof configSchema>): string {
+function logoHtml(cfg: z.infer<typeof configSchema>, textColor: string): string {
   const label = esc(cfg.label || cfg.symbol);
   if (cfg.logoUrl) {
     return `<img src="${esc(cfg.logoUrl)}" alt="${label}" style="width:38px;height:38px;border-radius:50%;object-fit:contain;background:#fff;padding:3px">`;
   }
-  return `<div style="width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,${esc(cfg.color)},#172033);color:#fff;font-weight:800;font-size:13px;letter-spacing:.2px">${esc(compactSymbol(cfg.symbol))}</div>`;
+  return `<div style="width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${esc(cfg.color)};color:${esc(textColor)};font-weight:800;font-size:13px;letter-spacing:.2px">${esc(compactSymbol(cfg.symbol))}</div>`;
 }
 
 /** Build an SVG sparkline with fill. */
@@ -114,26 +114,23 @@ function sparkline(points: number[], color: string): string {
     return [x, y] as const;
   });
   const line = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const first = coords[0]!;
-  const last = coords[coords.length - 1]!;
-  const area = `${first[0].toFixed(1)},${(H - P).toFixed(1)} ${line} ${last[0].toFixed(1)},${(H - P).toFixed(1)}`;
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <polygon points="${area}" fill="${esc(color)}" fill-opacity="0.16"/>
     <polyline points="${line}" fill="none" stroke="${esc(color)}" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round"/>
   </svg>`;
 }
 
 export const render: RenderFn = (ctx: RenderContext) => {
   const cfg = configSchema.parse(ctx.config);
+  const theme = ctx.theme;
   const source = ctx.data.chart;
   const title = cfg.label || cfg.symbol;
 
-  const shell = (body: string) => ctx.brick.screen(body, { bg: '#080d14', color: '#f7fbff', padding: 7, font: 'Inter, system-ui, sans-serif' });
+  const shell = (body: string) => ctx.brick.screen(body, { bg: theme.bg, color: theme.text, padding: 7, font: theme.font });
   const noData = (caption: string) => shell(`
     <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center">
-      ${logoHtml(cfg)}
-      <div style="font-size:17px;color:#c9d6e8;font-weight:700">${esc(title)}</div>
-      <div style="font-size:22px;color:#7f93b5;font-weight:700">${esc(caption)}</div>
+      ${logoHtml(cfg, theme.bg)}
+      <div style="font-size:17px;color:${esc(theme.text)};font-weight:700">${esc(title)}</div>
+      <div style="font-size:22px;color:${esc(theme.muted)};font-weight:700">${esc(caption)}</div>
     </div>`);
 
   if (!source || !source.ok) {
@@ -155,29 +152,29 @@ export const render: RenderFn = (ctx: RenderContext) => {
   const previous = Number.isFinite(chart.previous) ? chart.previous! : last;
   const deltaPct = previous === 0 ? 0 : ((last - previous) / previous) * 100;
   const up = deltaPct >= 0;
-  const accent = up ? cfg.color : '#ff5d73';
+  const accent = up ? cfg.color : theme.bad;
   const price = formatPrice(last, chart.currency, cfg.decimals);
   const delta = `${up ? '+' : ''}${deltaPct.toFixed(2)}%`;
-  const staleDot = source.stale ? '<div style="position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:#e0a000"></div>' : '';
+  const staleDot = source.stale ? `<div style="position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:${esc(theme.warn)}"></div>` : '';
 
   return shell(`
     <div style="position:relative;width:100%;height:100%;display:flex;flex-direction:column;gap:7px">
       ${staleDot}
       <div style="display:flex;align-items:center;gap:9px;min-height:42px">
-        ${logoHtml(cfg)}
+        ${logoHtml(cfg, theme.bg)}
         <div style="min-width:0;flex:1">
           <div style="font-size:15px;line-height:1.1;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(title)}</div>
-          <div style="font-size:10px;color:#8ca1bb;text-transform:uppercase;letter-spacing:.7px">${esc(cfg.assetType)} · ${esc(cfg.symbol)} · ${cfg.rangeDays}d</div>
+          <div style="font-size:10px;color:${esc(theme.muted)};text-transform:uppercase;letter-spacing:.7px">${esc(cfg.assetType)} · ${esc(cfg.symbol)} · ${cfg.rangeDays}d</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px">
         <div style="font-size:29px;line-height:1;font-weight:850;letter-spacing:-1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(price)}</div>
         <div style="font-size:14px;font-weight:800;color:${esc(accent)};padding-bottom:1px">${esc(delta)}</div>
       </div>
-      <div style="margin-top:2px;border:1px solid #152235;border-radius:12px;background:linear-gradient(180deg,#0f1724,#09111c);padding:5px">
+      <div style="margin-top:2px;border:1px solid ${esc(theme.border)};border-radius:12px;background:${esc(theme.surface)};padding:5px">
         ${sparkline(chart.points, accent)}
       </div>
-      <div style="display:flex;justify-content:space-between;color:#60748f;font-size:10px;letter-spacing:.2px">
+      <div style="display:flex;justify-content:space-between;color:${esc(theme.muted)};font-size:10px;letter-spacing:.2px">
         <span>${cfg.rangeDays} days</span><span>${esc(cfg.interval)}</span>
       </div>
     </div>`);

@@ -14,6 +14,8 @@ export interface DashboardAssignment {
 export interface Device {
   id: string;
   name: string;
+  /** Optional device-level theme, overridden by dashboard.theme. */
+  theme?: string;
   /**
    * The device's polling interval (advisory). Used to warn when a rotation
    * slot is shorter than the poll interval, which would skip dashboards.
@@ -31,6 +33,8 @@ export interface Dashboard {
   name: string;
   /** Per-dashboard config, validated against the plugin's configSchema. */
   config: Record<string, unknown>;
+  /** Optional dashboard-level theme override. */
+  theme?: string;
   /** Default dwell time when an assignment doesn't override it. */
   displayDurationMs: number;
 }

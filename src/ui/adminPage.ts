@@ -86,6 +86,7 @@ export function adminPage(): string {
           <div class="row">
             <label>Name<input name="name" required placeholder="Kitchen"></label>
             <label>Poll interval (s)<input name="poll" type="number" step="0.1" value="5" required></label>
+            <label>Device theme<select name="theme" class="theme-select"></select></label>
           </div>
           <div>
             <div class="meta">Rotation (dashboards shown in order)</div>
@@ -108,6 +109,7 @@ export function adminPage(): string {
           <div class="row">
             <label>Plugin<select name="pluginId" id="plugin-select"></select></label>
             <label>Display duration (s)<input name="duration" type="number" step="0.1" value="10" required></label>
+            <label>Theme override<select name="theme" class="theme-select" data-inherit="Inherit from device/default"></select></label>
           </div>
           <div class="config-head">
             <span>Configuration</span>
@@ -170,7 +172,7 @@ export function adminPage(): string {
     return fetch(u, { method: method, headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then(authed);
   }
 
-  var state = { plugins: [], dashboards: [], devices: [] };
+  var state = { plugins: [], dashboards: [], devices: [], config: { defaultTheme: 'dark', themes: ['dark', 'black', 'light', 'terminal'] } };
   var editingDashboardId = null, editingDeviceId = null;
   var configMode = 'form'; // 'form' | 'json'
 
@@ -178,6 +180,27 @@ export function adminPage(): string {
   function pluginById(id) { return state.plugins.find(function (p) { return p.id === id; }); }
   function dashboardById(id) { return state.dashboards.find(function (d) { return d.id === id; }); }
   function durationForDashboard(id) { var d = dashboardById(id); return d ? d.displayDurationMs : 10000; }
+  function themeLabel(t) {
+    if (t === 'dark') return 'Dark';
+    if (t === 'black') return 'Black (AMOLED)';
+    if (t === 'light') return 'Light';
+    if (t === 'terminal') return 'Terminal';
+    return t || 'Inherited';
+  }
+  function deviceTheme(t) { return t || state.config.defaultTheme || 'dark'; }
+  function dashboardTheme(t) { return t ? themeLabel(t) : 'Inherit'; }
+  function fillThemeSelect(sel, inheritLabel, value) {
+    sel.innerHTML = '';
+    if (inheritLabel) sel.appendChild(el('option', { value: '' }, [inheritLabel]));
+    (state.config.themes || []).forEach(function (t) { sel.appendChild(el('option', { value: t }, [themeLabel(t)])); });
+    sel.value = value || '';
+  }
+  function fillThemeSelects() {
+    Array.prototype.forEach.call(document.querySelectorAll('.theme-select'), function (sel) {
+      var inherit = sel.getAttribute('data-inherit');
+      fillThemeSelect(sel, inherit, sel.value || (inherit ? '' : state.config.defaultTheme));
+    });
+  }
   function dashboardForm() { return document.getElementById('dashboard-form'); }
   function deviceForm() { return document.getElementById('device-form'); }
   function openForm(form) { var d = form.closest('details'); if (d) d.open = true; }
@@ -281,7 +304,7 @@ export function adminPage(): string {
       var pname = (pluginById(d.pluginId) || {}).name || d.pluginId;
       list.appendChild(el('div', { class: 'card' }, [
         el('h3', null, [d.name]),
-        el('div', { class: 'meta' }, [pname + ' · ' + fmtSeconds(d.displayDurationMs) + 's']),
+        el('div', { class: 'meta' }, [pname + ' · ' + fmtSeconds(d.displayDurationMs) + 's · theme ' + dashboardTheme(d.theme)]),
         el('img', { src: bust('/admin/dashboards/' + d.id + '/preview.jpg'), alt: d.name }),
         el('div', { class: 'row' }, [
           el('button', { class: 'btn', onclick: function () { editDashboard(d); } }, ['Edit']),
@@ -299,6 +322,7 @@ export function adminPage(): string {
     fld(f, 'name').value = d.name;
     fld(f, 'pluginId').value = d.pluginId;
     fld(f, 'duration').value = fmtSeconds(d.displayDurationMs);
+    fld(f, 'theme').value = d.theme || '';
     renderConfigForm(d.pluginId, d.config || {});
     document.getElementById('config-text').value = JSON.stringify(d.config || {}, null, 2);
     setConfigMode(pluginConfigFields(d.pluginId).length ? 'form' : 'json');
@@ -309,6 +333,7 @@ export function adminPage(): string {
     editingDashboardId = null;
     document.getElementById('dashboard-mode').textContent = 'New dashboard';
     fld(f, 'name').value = '';
+    fld(f, 'theme').value = '';
     onPluginChange();
     openForm(f);
   }
@@ -337,7 +362,7 @@ export function adminPage(): string {
       });
       list.appendChild(el('div', { class: 'card' }, [
         el('h3', null, [dev.name]),
-        el('div', { class: 'meta' }, ['polls every ' + fmtSeconds(dev.pollIntervalMs) + 's']),
+        el('div', { class: 'meta' }, ['polls every ' + fmtSeconds(dev.pollIntervalMs) + 's · theme ' + themeLabel(deviceTheme(dev.theme))]),
         el('img', { src: bust('/devices/' + dev.id + '/screen.jpg'), alt: dev.name, 'data-dev': dev.id }),
         el('div', null, slots),
         el('div', { class: 'row', style: 'margin-top:10px' }, [
@@ -374,6 +399,7 @@ export function adminPage(): string {
     openForm(f);
     fld(f, 'name').value = dev.name;
     fld(f, 'poll').value = fmtSeconds(dev.pollIntervalMs);
+    fld(f, 'theme').value = deviceTheme(dev.theme);
     document.getElementById('assignments').innerHTML = '';
     (dev.assignments || []).forEach(function (a) { addAssign(a.dashboardId, a.displayDurationMs); });
     f.scrollIntoView({ behavior: 'smooth' });
@@ -384,6 +410,7 @@ export function adminPage(): string {
     document.getElementById('device-mode').textContent = 'New device';
     fld(f, 'name').value = '';
     fld(f, 'poll').value = 5;
+    fld(f, 'theme').value = state.config.defaultTheme || 'dark';
     document.getElementById('assignments').innerHTML = '';
     openForm(f);
   }
@@ -464,7 +491,7 @@ export function adminPage(): string {
           displayDurationMs: secondsToMs(row.querySelector('.assign-dur').value),
         };
       });
-      var body = { name: fld(f, 'name').value.trim(), pollIntervalMs: secondsToMs(fld(f, 'poll').value), assignments: assignments };
+      var body = { name: fld(f, 'name').value.trim(), theme: fld(f, 'theme').value, pollIntervalMs: secondsToMs(fld(f, 'poll').value), assignments: assignments };
       if (editingDeviceId) body.id = editingDeviceId;
       jsend('POST', '/admin/devices', body).then(function (r) { return r.json().then(function (j) { return { r: r, j: j }; }); })
         .then(function (o) {
@@ -489,6 +516,7 @@ export function adminPage(): string {
         config: config,
         displayDurationMs: secondsToMs(fld(f, 'duration').value),
       };
+      if (fld(f, 'theme').value) body.theme = fld(f, 'theme').value;
       if (editingDashboardId) body.id = editingDashboardId;
       jsend('POST', '/admin/dashboards', body).then(function (r) { return r.json().then(function (j) { return { r: r, j: j }; }); })
         .then(function (o) {
@@ -510,9 +538,10 @@ export function adminPage(): string {
   }
 
   function load() {
-    return Promise.all([jget('/admin/plugins'), jget('/admin/dashboards'), jget('/admin/devices')])
+    return Promise.all([jget('/admin/plugins'), jget('/admin/dashboards'), jget('/admin/devices'), jget('/admin/config')])
       .then(function (res) {
-        state.plugins = res[0]; state.dashboards = res[1]; state.devices = res[2];
+        state.plugins = res[0]; state.dashboards = res[1]; state.devices = res[2]; state.config = res[3];
+        fillThemeSelects();
         renderPlugins(); renderDashboards(); renderDevices();
       });
   }

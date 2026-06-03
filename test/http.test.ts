@@ -95,6 +95,12 @@ describe('HTTP routes', () => {
     expect(clock.exampleConfig).toMatchObject({ timezone: 'Europe/Paris' });
   });
 
+  it('GET /admin/config exposes available themes and the technical fallback', async () => {
+    const before = await app.inject({ method: 'GET', url: '/admin/config' });
+    expect(before.statusCode).toBe(200);
+    expect(before.json()).toMatchObject({ defaultTheme: 'dark', themes: ['dark', 'black', 'light', 'terminal'] });
+  });
+
   it('POST /admin/dashboards validates config and persists', async () => {
     const ok = await app.inject({
       method: 'POST', url: '/admin/dashboards',
@@ -168,6 +174,15 @@ describe('HTTP routes', () => {
     });
     expect(ok.statusCode).toBe(201);
     expect(ok.json().warnings).toHaveLength(1); // 1000ms slot < 5000ms poll interval
+  });
+
+  it('POST /admin/devices accepts a theme override', async () => {
+    const ok = await app.inject({
+      method: 'POST', url: '/admin/devices',
+      payload: { id: 'themed', name: 'Themed', theme: 'terminal', pollIntervalMs: 5000, assignments: [{ dashboardId: 'clock-paris', displayDurationMs: 10000 }] },
+    });
+    expect(ok.statusCode).toBe(201);
+    expect(store.getDevice('themed')!.theme).toBe('terminal');
   });
 
   it('DELETE /admin/devices/:id reports removal', async () => {

@@ -12,6 +12,7 @@ import type { AuthService } from '../auth/service.js';
 import { registerAuthGuard } from './guard.js';
 import { registerAuthRoutes } from './auth-routes.js';
 import { registerUi } from './ui.js';
+import { DEFAULT_THEME_NAME, THEME_NAMES } from '../theme/palette.js';
 
 export interface ServerDeps {
   engine: Engine;
@@ -68,6 +69,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       exampleConfig: p.manifest.exampleConfig ?? {},
     })),
   );
+
+  app.get('/admin/config', async () => ({ defaultTheme: DEFAULT_THEME_NAME, themes: THEME_NAMES }));
 
   app.get('/admin/devices', async () => store.getDevices());
   app.get('/admin/dashboards', async () => store.getDashboards());

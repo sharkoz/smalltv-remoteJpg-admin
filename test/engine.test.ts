@@ -103,6 +103,33 @@ describe('Engine.getScreenForDevice (rotation + cold render)', () => {
     expect(res!.jpg.toString()).toContain('TOKYO');
   });
 
+  it('caches the same dashboard separately for different device themes', async () => {
+    const { engine, store } = makeEngine([]);
+    store.upsertDevice({
+      id: 'black', name: 'Black', theme: 'black', pollIntervalMs: 2000,
+      assignments: [{ dashboardId: 'clock-paris', displayDurationMs: 10_000 }],
+    });
+    const defaultScreen = await engine.getScreenForDevice('kitchen');
+    const blackScreen = await engine.getScreenForDevice('black');
+    expect(defaultScreen!.jpg.toString()).toContain('background:#080d14');
+    expect(blackScreen!.jpg.toString()).toContain('background:#000000');
+  });
+
+  it('uses dashboard theme override before device theme', async () => {
+    const { engine, store } = makeEngine([]);
+    store.upsertDashboard({
+      id: 'clock-paris', pluginId: 'clock', name: 'Paris', theme: 'terminal',
+      config: { timezone: 'Europe/Paris', label: 'PARIS' }, displayDurationMs: 10_000,
+    });
+    store.upsertDevice({
+      id: 'lightdev', name: 'Light', theme: 'light', pollIntervalMs: 2000,
+      assignments: [{ dashboardId: 'clock-paris', displayDurationMs: 10_000 }],
+    });
+    const screen = await engine.getScreenForDevice('lightdev');
+    expect(screen!.jpg.toString()).toContain('background:#000000');
+    expect(screen!.jpg.toString()).toContain('font-family:"Courier New", Courier, monospace');
+  });
+
   it('returns a placeholder for an unknown device', async () => {
     const { engine } = makeEngine([]);
     expect(await engine.getScreenForDevice('nope')).toBeNull();
