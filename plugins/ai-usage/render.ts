@@ -3,6 +3,11 @@ import { formatCountdown, severityFor } from './parsers.js';
 import type { AiUsageConfig, Provider, ProviderUsage, UsageWindow } from './types.js';
 
 const providerLabels: Record<Provider, string> = { claude: 'Claude', codex: 'Codex' };
+
+const providerLogos: Record<Provider, string> = {
+  claude: `<svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0;image-rendering:pixelated"><g fill="#d97757"><rect x="2" y="3" width="12" height="2"/><rect x="2" y="5" width="2" height="2"/><rect x="5" y="5" width="6" height="2"/><rect x="12" y="5" width="2" height="2"/><rect x="0" y="7" width="16" height="2"/><rect x="2" y="9" width="12" height="2"/><rect x="3" y="11" width="1" height="2"/><rect x="5" y="11" width="1" height="2"/><rect x="10" y="11" width="1" height="2"/><rect x="12" y="11" width="1" height="2"/></g></svg>`,
+  codex: `<svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0"><circle cx="8" cy="8" r="8" fill="#0f0f0f"/><circle cx="8" cy="8" r="8" fill="url(#cdx)" opacity=".3"/><defs><radialGradient id="cdx" cx="30%" cy="25%"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs><g stroke="white" stroke-width="1.65" stroke-linecap="round"><line x1="8" y1="2.4" x2="8" y2="13.6"/><line x1="2.6" y1="5.2" x2="13.4" y2="10.8"/><line x1="13.4" y1="5.2" x2="2.6" y2="10.8"/></g></svg>`,
+};
 const severityColors = { low: '#35d07f', mid: '#f0b84a', critical: '#ff5c5c' } as const;
 
 function percent(window: UsageWindow | null): string {
@@ -20,10 +25,7 @@ function bar(window: UsageWindow | null): string {
 }
 
 function windowRow(label: string, window: UsageWindow | null, nowSeconds: number, compact: boolean): string {
-  if (compact) {
-    return `<div class="metric compact"><span>${label} ${percent(window)}</span>${bar(window)}</div>`;
-  }
-  return `<div class="metric"><div class="metric-head"><span>${label}</span><strong>${percent(window)}</strong></div>${bar(window)}<div class="reset">resets ${esc(reset(window, nowSeconds))}</div></div>`;
+  return `<div class="metric${compact ? ' compact' : ''}"><div class="metric-head"><span>${percent(window)}</span><span class="reset">${esc(reset(window, nowSeconds))}</span></div>${bar(window)}</div>`;
 }
 
 function statusText(usages: ProviderUsage[]): string {
@@ -48,12 +50,12 @@ function errorCard(label: string, message: string): string {
 
 function singleCard(config: AiUsageConfig, usage: ProviderUsage, nowSeconds: number): string {
   if (!usage.session && !usage.weekly) return errorCard(usage.label, usage.error ?? 'No usage available');
-  return `<section class="card single-card"><div class="provider-row"><div><div class="provider">${esc(usage.label)}</div>${usage.planLabel ? `<div class="plan">${esc(usage.planLabel)}</div>` : ''}</div><div class="status ${usage.status}">${esc(usage.status)}</div></div>${windowRow('5h', usage.session, nowSeconds, false)}${windowRow('7d', usage.weekly, nowSeconds, false)}${review(usage, config.showReview, nowSeconds)}${credits(usage, config.showCredits)}</section>`;
+  return `<section class="card single-card"><div class="provider-row"><div class="provider-info">${providerLogos[usage.provider]}<span class="provider">${esc(usage.label)}</span>${usage.planLabel ? `<span class="plan">${esc(usage.planLabel)}</span>` : ''}</div><div class="status ${usage.status}">${esc(usage.status)}</div></div>${windowRow('5h', usage.session, nowSeconds, false)}${windowRow('7d', usage.weekly, nowSeconds, false)}${review(usage, config.showReview, nowSeconds)}${credits(usage, config.showCredits)}</section>`;
 }
 
 function dualCard(config: AiUsageConfig, usage: ProviderUsage, nowSeconds: number): string {
   if (!usage.session && !usage.weekly) return errorCard(usage.label, usage.error ?? 'No usage available');
-  return `<section class="card dual-card"><div class="provider-row"><div><div class="provider">${esc(usage.label)}</div>${usage.planLabel ? `<div class="plan">${esc(usage.planLabel)}</div>` : ''}</div><div class="status ${usage.status}">${esc(usage.status)}</div></div>${windowRow('5h', usage.session, nowSeconds, true)}${windowRow('7d', usage.weekly, nowSeconds, true)}${review(usage, config.showReview, nowSeconds)}${credits(usage, config.showCredits)}</section>`;
+  return `<section class="card dual-card"><div class="provider-row"><div class="provider-info">${providerLogos[usage.provider]}<span class="provider">${esc(usage.label)}</span>${usage.planLabel ? `<span class="plan">${esc(usage.planLabel)}</span>` : ''}</div><div class="status ${usage.status}">${esc(usage.status)}</div></div>${windowRow('5h', usage.session, nowSeconds, true)}${windowRow('7d', usage.weekly, nowSeconds, true)}${review(usage, config.showReview, nowSeconds)}${credits(usage, config.showCredits)}</section>`;
 }
 
 export function renderAiUsage(config: AiUsageConfig, usages: ProviderUsage[], nowSeconds: number): string {
@@ -69,11 +71,10 @@ export function renderAiUsage(config: AiUsageConfig, usages: ProviderUsage[], no
 html,body{width:240px;height:240px;overflow:hidden}
 body{background:#080a0f;color:#f4f7fb;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .shell{width:240px;height:240px;padding:10px;display:flex;flex-direction:column;gap:7px;background:radial-gradient(circle at top left,#162033,#080a0f 58%)}
-.title{font-size:18px;font-weight:800;letter-spacing:.2px;line-height:1;color:#ffffff}
-.cards{display:grid;grid-template-columns:1fr;gap:7px;flex:1;min-height:0}.cards.dual{grid-template-columns:1fr 1fr}
+.cards{display:grid;grid-template-columns:1fr;gap:7px;flex:1;min-height:0}
 .card{background:#111722;border:1px solid #243044;border-radius:14px;padding:9px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);min-width:0;overflow:hidden}.card.single-card{display:flex;flex-direction:column;gap:8px}.card.dual-card{display:flex;flex-direction:column;gap:6px;padding:8px}
-.provider-row{display:flex;align-items:flex-start;justify-content:space-between;gap:5px}.provider{font-size:15px;font-weight:800;line-height:1.05;color:#f8fbff}.plan{font-size:10px;color:#9aa7ba;margin-top:2px}.status{font-size:8px;text-transform:uppercase;color:#93f0bd;background:#143823;border-radius:999px;padding:3px 5px}.status.stale{color:#ffd27a;background:#3b2e12}.status.error{color:#ff9a9a;background:#3b1616}
-.metric{display:flex;flex-direction:column;gap:4px}.metric-head,.compact{font-size:12px;color:#c5cfdd}.metric-head{display:flex;justify-content:space-between;align-items:center}.metric-head strong{font-size:19px;color:#fff}.compact{gap:3px}.compact span{font-weight:750;color:#f3f6fb;white-space:nowrap;font-size:12px}.bar{height:7px;border-radius:999px;background:#252c38;overflow:hidden}.compact .bar{height:5px}.fill{height:100%;border-radius:999px}.reset{font-size:10px;color:#8f9caf}.review,.credits{font-size:10px;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.credits{color:#9ee7b4;font-weight:750}.error{display:flex;flex-direction:column;gap:7px;justify-content:center}.error-title{font-size:13px;font-weight:800;color:#ffaaaa}.error-msg{font-size:10px;line-height:1.2;color:#d7a3a3;word-break:break-word}
+.provider-row{display:flex;align-items:center;justify-content:space-between;gap:5px}.provider-info{display:flex;align-items:center;gap:5px;min-width:0}.provider{font-size:15px;font-weight:800;line-height:1.05;color:#f8fbff}.plan{font-size:10px;color:#9aa7ba}.status{font-size:8px;text-transform:uppercase;color:#93f0bd;background:#143823;border-radius:999px;padding:3px 5px}.status.stale{color:#ffd27a;background:#3b2e12}.status.error{color:#ff9a9a;background:#3b1616}
+.metric{display:flex;flex-direction:column;gap:4px}.metric-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#c5cfdd}.metric-head span:first-child{font-weight:750;color:#f3f6fb}.compact{gap:3px}.bar{height:7px;border-radius:999px;background:#252c38;overflow:hidden}.compact .bar{height:5px}.fill{height:100%;border-radius:999px}.reset{font-size:10px;color:#8f9caf}.review,.credits{font-size:10px;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.credits{color:#9ee7b4;font-weight:750}.error{display:flex;flex-direction:column;gap:7px;justify-content:center}.error-title{font-size:13px;font-weight:800;color:#ffaaaa}.error-msg{font-size:10px;line-height:1.2;color:#d7a3a3;word-break:break-word}
 .footer{font-size:10px;color:#7f8ca3;text-align:center;line-height:1}
-</style></head><body><main class="shell"><h1 class="title">${esc(config.title)}</h1><div class="cards ${dual ? 'dual' : 'single'}">${cards}</div><footer class="footer">${esc(statusText(ordered))}</footer></main></body></html>`;
+</style></head><body><main class="shell"><div class="cards ${dual ? 'dual' : 'single'}">${cards}</div><footer class="footer">${esc(statusText(ordered))}</footer></main></body></html>`;
 }

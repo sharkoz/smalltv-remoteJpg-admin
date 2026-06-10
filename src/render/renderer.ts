@@ -24,7 +24,7 @@ export class Renderer implements RendererLike {
   async renderHtmlToJpg(html: string, opts: RenderOptions = {}): Promise<Buffer> {
     const { quality = 100, settleMs = 50 } = opts;
     return this.pool.withPage(async (page) => {
-      await page.setContent(html, { waitUntil: 'domcontentloaded' });
+      await page.setContent(html, { waitUntil: 'load' });
       // Give webfonts/layout a brief moment, bounded so a slow page can't hang.
       await page.evaluate(() => (globalThis as any).document?.fonts?.ready).catch(() => undefined);
       await page.waitForTimeout(settleMs);
