@@ -6,3 +6,4 @@ config/secrets.json
 config/auth.json
 .DS_Store
 coverage/
+.worktrees/
