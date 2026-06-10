@@ -36,7 +36,7 @@ const manifestShape = z.object({
       z.object({
         key: z.string().min(1),
         label: z.string().min(1),
-        type: z.enum(['string', 'number', 'boolean', 'select', 'text', 'color']),
+        type: z.enum(['string', 'number', 'boolean', 'select', 'text', 'color', 'location']),
         description: z.string().optional(),
         default: z.unknown().optional(),
         required: z.boolean().optional(),
@@ -45,6 +45,8 @@ const manifestShape = z.object({
         min: z.number().optional(),
         max: z.number().optional(),
         step: z.number().optional(),
+        latKey: z.string().optional(),
+        lonKey: z.string().optional(),
       }),
     )
     .optional(),

@@ -51,6 +51,14 @@ export function adminPage(): string {
   .field-bool input { width:auto; }
   .field-bool .field-label { font-size:13px; color:#e8edf5; }
   .field-bool .field-hint { flex-basis:100%; }
+  .loc-wrap { position:relative; }
+  .loc-drop { position:absolute; top:calc(100% + 3px); left:0; right:0; background:#101825; border:1px solid #2b3a57; border-radius:8px; z-index:20; max-height:192px; overflow-y:auto; display:none; box-shadow:0 8px 24px rgba(0,0,0,.6); }
+  .loc-drop.open { display:block; }
+  .loc-item { padding:9px 12px; cursor:pointer; border-bottom:1px solid #1a2540; }
+  .loc-item:last-child { border-bottom:0; }
+  .loc-item:hover { background:#162036; }
+  .loc-name { font-size:13px; color:#e8edf5; font-weight:600; }
+  .loc-sub { font-size:11px; color:#5e7193; margin-top:2px; }
   .hint { font-size:12px; color:#5e7193; padding:6px 0; }
   .logs { background:#0a0f18; border:1px solid #1f2b44; border-radius:10px; padding:8px; max-height:340px; overflow:auto; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; }
   .log-row { display:flex; gap:8px; padding:3px 4px; border-bottom:1px solid #131c2e; }
@@ -231,6 +239,56 @@ export function adminPage(): string {
     pluginConfigFields(pluginId).forEach(function (f) { if (f.default !== undefined) cfg[f.key] = f.default; });
     return cfg;
   }
+  function makeLocationWidget(f, cityVal, latVal, lonVal) {
+    var wrap = document.createElement('div'); wrap.className = 'loc-wrap';
+    var search = el('input', { type: 'text', 'data-key': f.key, 'data-type': 'string',
+      placeholder: f.placeholder || 'Search for a city…',
+      value: cityVal == null ? '' : String(cityVal) });
+    search.style.width = '100%';
+    var latInp = el('input', { type: 'hidden', 'data-key': f.latKey || 'lat', 'data-type': 'number',
+      value: latVal != null ? String(latVal) : '' });
+    var lonInp = el('input', { type: 'hidden', 'data-key': f.lonKey || 'lon', 'data-type': 'number',
+      value: lonVal != null ? String(lonVal) : '' });
+    var drop = el('div', { class: 'loc-drop' });
+    wrap.appendChild(search); wrap.appendChild(latInp); wrap.appendChild(lonInp); wrap.appendChild(drop);
+    var timer;
+    function showResults(results) {
+      drop.innerHTML = '';
+      if (!results.length) {
+        drop.appendChild(el('div', { class: 'loc-item' }, [el('div', { class: 'loc-name' }, ['No results'])]));
+      } else {
+        results.forEach(function(r) {
+          var sub = [r.admin1, r.country].filter(Boolean).join(', ');
+          var item = el('div', { class: 'loc-item' }, [
+            el('div', { class: 'loc-name' }, [r.name]),
+            el('div', { class: 'loc-sub' }, [sub]),
+          ]);
+          item.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            search.value = r.name;
+            latInp.value = String(r.latitude);
+            lonInp.value = String(r.longitude);
+            drop.classList.remove('open'); drop.innerHTML = '';
+          });
+          drop.appendChild(item);
+        });
+      }
+      drop.classList.add('open');
+    }
+    search.addEventListener('input', function() {
+      clearTimeout(timer);
+      var q = search.value.trim();
+      if (q.length < 2) { drop.classList.remove('open'); drop.innerHTML = ''; return; }
+      timer = setTimeout(function() {
+        fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(q) + '&count=6&language=en&format=json')
+          .then(function(r) { return r.json(); })
+          .then(function(d) { showResults(d.results || []); })
+          .catch(function() { drop.classList.remove('open'); });
+      }, 300);
+    });
+    search.addEventListener('blur', function() { setTimeout(function() { drop.classList.remove('open'); }, 150); });
+    return wrap;
+  }
   function makeInput(f, val) {
     var input;
     if (f.type === 'boolean') { input = document.createElement('input'); input.type = 'checkbox'; input.checked = !!val; }
@@ -253,8 +311,24 @@ export function adminPage(): string {
     var fields = pluginConfigFields(pluginId);
     var c = document.getElementById('config-fields'); c.innerHTML = '';
     if (!fields.length) { c.appendChild(el('div', { class: 'hint' }, ['This plugin has no field schema — use Raw JSON.'])); return; }
+    // Keys managed (hidden) by a location widget — don't render them as standalone fields.
+    var managed = {};
+    fields.forEach(function(f) { if (f.type === 'location') { if (f.latKey) managed[f.latKey] = true; if (f.lonKey) managed[f.lonKey] = true; } });
     fields.forEach(function (f) {
+      if (managed[f.key]) return;
       var val = values && values[f.key] !== undefined ? values[f.key] : f.default;
+      if (f.type === 'location') {
+        // Resolve lat/lon from current values, falling back to their field defaults.
+        var latField = f.latKey && fields.find(function(x) { return x.key === f.latKey; });
+        var lonField = f.lonKey && fields.find(function(x) { return x.key === f.lonKey; });
+        var latVal = values && f.latKey && values[f.latKey] !== undefined ? values[f.latKey] : (latField ? latField.default : undefined);
+        var lonVal = values && f.lonKey && values[f.lonKey] !== undefined ? values[f.lonKey] : (lonField ? lonField.default : undefined);
+        var widget = makeLocationWidget(f, val, latVal, lonVal);
+        var wrap = el('div', { class: 'field' }, [el('span', { class: 'field-label' }, [f.label + (f.required ? ' *' : '')])]);
+        wrap.appendChild(widget);
+        if (f.description) wrap.appendChild(el('span', { class: 'field-hint' }, [f.description]));
+        c.appendChild(wrap); return;
+      }
       var input = makeInput(f, val);
       if (f.type === 'boolean') {
         var b = el('label', { class: 'field field-bool' }, [input, el('span', { class: 'field-label' }, [f.label])]);

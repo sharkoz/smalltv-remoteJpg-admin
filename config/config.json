@@ -55,6 +55,34 @@
         "unit": "EUR per USD"
       },
       "displayDurationMs": 15000
+    },
+    {
+      "id": "weather-paris-simple",
+      "pluginId": "weather",
+      "name": "Paris Weather",
+      "config": {
+        "city": "Paris",
+        "lat": 48.85,
+        "lon": 2.35,
+        "mode": "simple",
+        "unit": "celsius",
+        "accentColor": "#60a5fa"
+      },
+      "displayDurationMs": 15000
+    },
+    {
+      "id": "weather-paris-advanced",
+      "pluginId": "weather",
+      "name": "Paris Forecast",
+      "config": {
+        "city": "Paris",
+        "lat": 48.85,
+        "lon": 2.35,
+        "mode": "advanced",
+        "unit": "celsius",
+        "accentColor": "#60a5fa"
+      },
+      "displayDurationMs": 15000
     }
   ]
 }

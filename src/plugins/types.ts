@@ -38,7 +38,7 @@ export interface ConfigFieldOption {
 export interface ConfigField {
   key: string;
   label: string;
-  type: 'string' | 'number' | 'boolean' | 'select' | 'text' | 'color';
+  type: 'string' | 'number' | 'boolean' | 'select' | 'text' | 'color' | 'location';
   /** Help text shown under the field (a plain-language tooltip). */
   description?: string;
   default?: unknown;
@@ -50,6 +50,10 @@ export interface ConfigField {
   min?: number;
   max?: number;
   step?: number;
+  /** For `location` type: sibling config key that receives the latitude. */
+  latKey?: string;
+  /** For `location` type: sibling config key that receives the longitude. */
+  lonKey?: string;
 }
 
 /** The static contract a plugin declares. */
