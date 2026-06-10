@@ -238,6 +238,34 @@ describe('ai-usage clients', () => {
     expect(fetch).toHaveBeenCalledWith('https://example.test/backend-api/wham/usage', expect.any(Object));
   });
 
+  it('normalizes official Codex host base URL to backend-api wham usage', async () => {
+    const readText = vi.fn(async (path: string) => {
+      if (path === '/home/me/.codex/auth.json') {
+        return JSON.stringify({
+          tokens: {
+            access_token: 'codex-access',
+            refresh_token: 'codex-refresh',
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+          },
+        });
+      }
+      if (path === '/home/me/.codex/config.toml') return 'chatgpt_base_url = "https://chatgpt.com"';
+      throw new Error(`unexpected read ${path}`);
+    });
+    const fetch = vi.fn(async () => new Response(JSON.stringify(codexPayload), { status: 200 }));
+    const usageFetcher = createAiUsageFetcher({
+      nowMs: () => 1_779_990_000_000,
+      readText,
+      writeText: vi.fn(),
+      fetch,
+      homeDir: () => '/home/me',
+    });
+
+    await usageFetcher.fetch('codex');
+
+    expect(fetch).toHaveBeenCalledWith('https://chatgpt.com/backend-api/wham/usage', expect.any(Object));
+  });
+
   it('refreshes Codex credentials when last_refresh is inside the refresh window and persists last_refresh', async () => {
     const readText = vi.fn(async (path: string) => {
       if (path === '/home/me/.codex/auth.json') {

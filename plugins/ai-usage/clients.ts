@@ -187,7 +187,8 @@ function codexAccountId(auth: Record<string, unknown>): string | undefined {
 
 function parseCodexBaseUrl(configToml: string): string {
   const match = /^\s*chatgpt_base_url\s*=\s*["']([^"']+)["']/m.exec(configToml);
-  return match?.[1]?.replace(/\/+$/, '') ?? CODEX_DEFAULT_BASE_URL;
+  const baseUrl = match?.[1]?.replace(/\/+$/, '') ?? CODEX_DEFAULT_BASE_URL;
+  return baseUrl === 'https://chatgpt.com' || baseUrl === 'https://chat.openai.com' ? `${baseUrl}/backend-api` : baseUrl;
 }
 
 function codexUsagePath(baseUrl: string): string {
