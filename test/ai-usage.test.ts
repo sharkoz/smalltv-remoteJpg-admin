@@ -192,6 +192,16 @@ describe('ai-usage renderer', () => {
     expect(html).not.toContain('.dual{display:flex');
   });
 
+  it('renders zero Codex credits', () => {
+    const html = renderAiUsage(
+      { providers: ['codex'], title: 'AI Usage', mode: 'single', showCredits: true, showReview: true, theme: 'dark' },
+      [{ ...codexUsage, credits: { ...codexUsage.credits, balance: 0 } }],
+      1_780_000_000,
+    );
+
+    expect(html).toContain('Credits 0');
+  });
+
   it('renders provider-specific error card when no usage is available', () => {
     const html = renderAiUsage(
       { providers: ['codex'], title: 'AI Usage', mode: 'single', showCredits: true, showReview: true, theme: 'dark' },

@@ -33,7 +33,7 @@ function statusText(usages: ProviderUsage[]): string {
 }
 
 function credits(usage: ProviderUsage, enabled: boolean): string {
-  if (!enabled || usage.provider !== 'codex' || !usage.credits?.balance) return '';
+  if (!enabled || usage.provider !== 'codex' || usage.credits?.balance === undefined || usage.credits.balance === null) return '';
   return `<div class="credits">Credits ${esc(usage.credits.balance)}</div>`;
 }
 
