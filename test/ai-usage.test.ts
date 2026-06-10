@@ -1,4 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
+
+const fetchProvider = vi.hoisted(() => vi.fn());
+
+vi.mock('../plugins/ai-usage/clients.js', async (importOriginal) => ({
+  ...((await importOriginal()) as object),
+  defaultAiUsageFetcher: { fetch: fetchProvider },
+}));
 import { makeBricks } from '../src/plugins/brick.js';
 import type { RenderContext } from '../src/plugins/types.js';
 import { manifest, render } from '../plugins/ai-usage/index.js';
@@ -13,6 +20,8 @@ import {
   severityFor,
 } from '../plugins/ai-usage/parsers.js';
 import { createAiUsageFetcher } from '../plugins/ai-usage/clients.js';
+import { renderAiUsage } from '../plugins/ai-usage/render.js';
+import type { ProviderUsage } from '../plugins/ai-usage/types.js';
 
 function testCtx(config: Record<string, unknown>): { ctx: RenderContext; logs: Array<{ level: string; message: string; meta?: unknown }> } {
   const data = {};
@@ -48,8 +57,29 @@ const claudePayload = {
   seven_day: { utilization: 74.9, resets_at: '2026-06-14T08:00:00Z' },
 };
 
+const claudeUsage: ProviderUsage = {
+  provider: 'claude',
+  label: 'Claude',
+  session: { usedPercent: 33, resetAt: 1_780_018_000, windowSeconds: 18_000 },
+  weekly: { usedPercent: 75, resetAt: 1_780_604_800, windowSeconds: 604_800 },
+  status: 'ok',
+  fetchedAt: 1_780_000_000,
+};
+
+const codexUsage: ProviderUsage = {
+  provider: 'codex',
+  label: 'Codex',
+  planLabel: 'Pro Lite',
+  session: { usedPercent: 42, resetAt: 1_780_018_000, windowSeconds: 18_000 },
+  weekly: { usedPercent: 69, resetAt: 1_780_604_800, windowSeconds: 604_800 },
+  review: { usedPercent: 12, resetAt: 1_780_604_800, windowSeconds: 604_800 },
+  credits: { balance: 3, localMessages: [10, 15], cloudMessages: [4, 8] },
+  status: 'ok',
+  fetchedAt: 1_780_000_000,
+};
+
 describe('ai-usage config', () => {
-  it('ships a valid example config and placeholder render', () => {
+  it('ships a valid example config and render', async () => {
     expect(manifest.id).toBe('ai-usage');
     expect(manifest.name).toBe('AI Usage');
     expect(manifest.defaultDisplayDurationMs).toBe(15_000);
@@ -58,9 +88,10 @@ describe('ai-usage config', () => {
     expect(manifest.configSchema!.safeParse(manifest.exampleConfig).success).toBe(true);
     expect(manifest.configFields?.some((field) => field.key === 'providers')).toBe(true);
 
-
+    fetchProvider.mockReset();
+    fetchProvider.mockResolvedValue(claudeUsage);
     const { ctx } = testCtx({ title: 'Usage Now', providers: ['claude'], mode: 'single' });
-    expect(render(ctx)).toContain('Usage Now');
+    await expect(render(ctx)).resolves.toContain('Usage Now');
   });
 
   it('normalizes defaults for a minimal config', () => {
@@ -85,6 +116,97 @@ describe('ai-usage config', () => {
     expect(() => aiUsageConfigSchema.parse({ providers: ['claude', 'claude'] })).toThrow(/duplicate/i);
     expect(() => aiUsageConfigSchema.parse({ providers: ['claude'], mode: 'both' })).toThrow(/both/i);
     expect(() => aiUsageConfigSchema.parse({ providers: ['claude', 'codex'], mode: 'single' })).toThrow(/single/i);
+  });
+});
+
+describe('ai-usage plugin render', () => {
+  it('fetches configured providers, logs degraded states, and renders usage', async () => {
+    fetchProvider.mockReset();
+    fetchProvider.mockImplementation(async (provider: string) => (provider === 'claude' ? claudeUsage : { ...codexUsage, status: 'stale' }));
+    const { ctx, logs } = testCtx({ providers: ['claude', 'codex'], mode: 'both', title: 'AI Usage' });
+
+    const html = await render(ctx);
+
+    expect(fetchProvider).toHaveBeenCalledWith('claude');
+    expect(fetchProvider).toHaveBeenCalledWith('codex');
+    expect(logs).toContainEqual({
+      level: 'warn',
+      message: 'ai-usage provider degraded',
+      meta: { provider: 'codex', status: 'stale', error: undefined },
+    });
+    expect(html).toContain('Claude');
+    expect(html).toContain('Codex');
+  });
+
+  it('renders provider errors when fetch throws without logging secrets', async () => {
+    fetchProvider.mockReset();
+    fetchProvider.mockRejectedValue(new Error('token abc123 failed'));
+    const { ctx, logs } = testCtx({ providers: ['codex'], mode: 'single', title: 'AI Usage' });
+
+    const html = await render(ctx);
+
+    expect(html).toContain('Codex');
+    expect(html).toContain('token abc123 failed');
+    expect(logs).toContainEqual({
+      level: 'warn',
+      message: 'ai-usage provider degraded',
+      meta: { provider: 'codex', status: 'error', error: 'fetch failed' },
+    });
+  });
+});
+
+describe('ai-usage renderer', () => {
+  it('renders a single provider layout with title, 5h, 7d, and percentages', () => {
+    const html = renderAiUsage(
+      { providers: ['claude'], title: 'Usage Now', mode: 'single', showCredits: true, showReview: true, theme: 'dark' },
+      [claudeUsage],
+      1_780_000_000,
+    );
+
+    expect(html).toContain('<!DOCTYPE html>');
+    expect(html).toContain('Usage Now');
+    expect(html).toContain('5h');
+    expect(html).toContain('7d');
+    expect(html).toContain('33%');
+    expect(html).toContain('75%');
+  });
+
+  it('renders a dual provider layout with compact windows and Codex credits', () => {
+    const html = renderAiUsage(
+      { providers: ['claude', 'codex'], title: 'AI Usage', mode: 'both', showCredits: true, showReview: true, theme: 'dark' },
+      [claudeUsage, codexUsage],
+      1_780_000_000,
+    );
+
+    expect(html).toContain('AI Usage');
+    expect(html).toContain('Claude');
+    expect(html).toContain('Codex');
+    expect(html).toContain('5h 33%');
+    expect(html).toContain('7d 75%');
+    expect(html).toContain('5h 42%');
+    expect(html).toContain('7d 69%');
+    expect(html).toContain('Credits 3');
+  });
+
+  it('renders provider-specific error card when no usage is available', () => {
+    const html = renderAiUsage(
+      { providers: ['codex'], title: 'AI Usage', mode: 'single', showCredits: true, showReview: true, theme: 'dark' },
+      [
+        {
+          provider: 'codex',
+          label: 'Codex',
+          session: null,
+          weekly: null,
+          status: 'error',
+          fetchedAt: null,
+          error: 'auth file missing',
+        },
+      ],
+      1_780_000_000,
+    );
+
+    expect(html).toContain('Codex');
+    expect(html).toContain('auth file missing');
   });
 });
 

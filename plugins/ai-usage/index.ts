@@ -1,5 +1,8 @@
 import type { PluginManifest, RenderFn } from '../../src/plugins/types.js';
+import { defaultAiUsageFetcher } from './clients.js';
 import { aiUsageConfigSchema } from './parsers.js';
+import { renderAiUsage } from './render.js';
+import type { ProviderUsage } from './types.js';
 
 export const manifest: PluginManifest = {
   id: 'ai-usage',
@@ -41,7 +44,31 @@ export const manifest: PluginManifest = {
   },
 };
 
-export const render: RenderFn = (ctx) => {
+
+export const render: RenderFn = async (ctx) => {
   const cfg = aiUsageConfigSchema.parse(ctx.config);
-  return ctx.brick.screen(ctx.brick.text({ content: cfg.title, size: 24 }), { bg: '#000000' });
+  const usages: ProviderUsage[] = [];
+
+  for (const provider of cfg.providers) {
+    try {
+      const usage = await defaultAiUsageFetcher.fetch(provider);
+      usages.push(usage);
+      if (usage.status !== 'ok') {
+        ctx.log.warn('ai-usage provider degraded', { provider, status: usage.status, error: usage.error ? 'fetch failed' : undefined });
+      }
+    } catch (error) {
+      ctx.log.warn('ai-usage provider degraded', { provider, status: 'error', error: 'fetch failed' });
+      usages.push({
+        provider,
+        label: provider === 'claude' ? 'Claude' : 'Codex',
+        session: null,
+        weekly: null,
+        status: 'error',
+        fetchedAt: null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return renderAiUsage(cfg, usages, Math.floor(ctx.now.getTime() / 1000));
 };
