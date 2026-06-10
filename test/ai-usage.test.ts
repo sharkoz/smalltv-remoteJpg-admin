@@ -238,6 +238,59 @@ describe('ai-usage clients', () => {
     expect(fetch).toHaveBeenCalledWith('https://example.test/backend-api/wham/usage', expect.any(Object));
   });
 
+  it('refreshes Codex credentials when last_refresh is inside the refresh window and persists last_refresh', async () => {
+    const readText = vi.fn(async (path: string) => {
+      if (path === '/home/me/.codex/auth.json') {
+        return JSON.stringify({
+          tokens: {
+            access_token: 'old-codex-access',
+            refresh_token: 'codex-refresh',
+            account_id: 'acct_tokens',
+          },
+          last_refresh: '2026-05-28T19:31:39.000Z',
+        });
+      }
+      if (path === '/home/me/.codex/config.toml') return '';
+      throw new Error(`unexpected read ${path}`);
+    });
+    const writeText = vi.fn();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'new-codex-access', refresh_token: 'new-codex-refresh', expires_in: 3600 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(codexPayload), { status: 200 }));
+    const usageFetcher = createAiUsageFetcher({
+      nowMs: () => 1_780_000_000_000,
+      readText,
+      writeText,
+      fetch,
+      homeDir: () => '/home/me',
+    });
+
+    await usageFetcher.fetch('codex');
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'https://auth.openai.com/oauth/token',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(URLSearchParams),
+      }),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://chatgpt.com/backend-api/wham/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer new-codex-access' }),
+      }),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      '/home/me/.codex/auth.json',
+      expect.stringContaining('"last_refresh": "2026-05-28T20:26:40.000Z"'),
+    );
+    const persisted = JSON.parse(writeText.mock.calls[0]?.[1] as string);
+    expect(persisted.tokens).toMatchObject({ access_token: 'new-codex-access', refresh_token: 'new-codex-refresh' });
+  });
+
   it('refreshes near-expiry Claude credentials with Anthropic client id', async () => {
     const readText = vi.fn(async (path: string) => {
       expect(path).toBe('/home/me/.claude/.credentials.json');
@@ -283,6 +336,44 @@ describe('ai-usage clients', () => {
       }),
     );
     expect(writeText).toHaveBeenCalled();
+  });
+
+  it('uses existing Claude access token when near-expiry proactive refresh fails before expiry', async () => {
+    const readText = vi.fn(async (path: string) => {
+      expect(path).toBe('/home/me/.claude/.credentials.json');
+      return JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'old-claude-access',
+          refreshToken: 'claude-refresh',
+          expiresAt: 1_780_000_001_000,
+        },
+      });
+    });
+    const writeText = vi.fn();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'temporarily_unavailable' }), { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(claudePayload), { status: 200 }));
+    const usageFetcher = createAiUsageFetcher({
+      nowMs: () => 1_780_000_000_000,
+      readText,
+      writeText,
+      fetch,
+      homeDir: () => '/home/me',
+    });
+
+    const usage = await usageFetcher.fetch('claude');
+
+    expect(fetch).toHaveBeenNthCalledWith(1, 'https://console.anthropic.com/v1/oauth/token', expect.any(Object));
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer old-claude-access' }),
+      }),
+    );
+    expect(writeText).not.toHaveBeenCalled();
+    expect(usage).toMatchObject({ provider: 'claude', status: 'ok', session: { usedPercent: 33 } });
   });
 
   it('fetches Claude usage using claudeAiOauth credentials', async () => {

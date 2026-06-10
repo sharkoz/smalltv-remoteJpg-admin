@@ -6,6 +6,7 @@ import type { FetchDeps, Provider, ProviderUsage } from './types.js';
 
 const DEFAULT_CACHE_TTL_MS = 60_000;
 const REFRESH_SKEW_MS = 300_000;
+const CODEX_ACCESS_TOKEN_TTL_MS = 3_600_000;
 const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 const CODEX_DEFAULT_BASE_URL = 'https://chatgpt.com/backend-api';
 const CODEX_REFRESH_URL = 'https://auth.openai.com/oauth/token';
@@ -57,8 +58,18 @@ function expiryMs(value: number | undefined): number | undefined {
   return value > 10_000_000_000 ? value : value * 1000;
 }
 
+function dateMs(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function isExpiring(token: OAuthTokenSet, nowMs: number): boolean {
   return token.expiresAtMs !== undefined && token.expiresAtMs <= nowMs + REFRESH_SKEW_MS;
+}
+
+function isExpired(token: OAuthTokenSet, nowMs: number): boolean {
+  return token.expiresAtMs !== undefined && token.expiresAtMs <= nowMs;
 }
 
 function parseJson(text: string, path: string): Record<string, unknown> {
@@ -72,10 +83,12 @@ function parseCodexToken(auth: Record<string, unknown>): OAuthTokenSet {
   const tokens = asRecord(auth.tokens) ?? auth;
   const accessToken = stringAt(tokens, 'access_token') ?? stringAt(tokens, 'accessToken');
   if (!accessToken) throw new Error('Codex auth.json missing access token');
+  const explicitExpiresAtMs = expiryMs(numberAt(tokens, 'expires_at') ?? numberAt(tokens, 'expiresAt'));
+  const lastRefreshMs = dateMs(stringAt(auth, 'last_refresh') ?? stringAt(tokens, 'last_refresh'));
   return {
     accessToken,
     refreshToken: stringAt(tokens, 'refresh_token') ?? stringAt(tokens, 'refreshToken'),
-    expiresAtMs: expiryMs(numberAt(tokens, 'expires_at') ?? numberAt(tokens, 'expiresAt')),
+    expiresAtMs: explicitExpiresAtMs ?? (lastRefreshMs === undefined ? undefined : lastRefreshMs + CODEX_ACCESS_TOKEN_TTL_MS),
   };
 }
 
@@ -91,11 +104,14 @@ function parseClaudeToken(credentials: Record<string, unknown>): OAuthTokenSet {
   };
 }
 
-function setCodexToken(auth: Record<string, unknown>, token: OAuthTokenSet): void {
+function setCodexToken(auth: Record<string, unknown>, token: OAuthTokenSet, nowMs: number): void {
   const tokens = asRecord(auth.tokens) ?? auth;
   tokens.access_token = token.accessToken;
   if (token.refreshToken) tokens.refresh_token = token.refreshToken;
-  if (token.expiresAtMs !== undefined) tokens.expires_at = Math.floor(token.expiresAtMs / 1000);
+  if (token.expiresAtMs !== undefined && (tokens.expires_at !== undefined || tokens.expiresAt !== undefined)) {
+    tokens.expires_at = Math.floor(token.expiresAtMs / 1000);
+  }
+  auth.last_refresh = new Date(nowMs).toISOString();
   if (!auth.tokens) return;
   auth.tokens = tokens;
 }
@@ -165,10 +181,21 @@ async function fetchCodexUsage(deps: FetchDeps): Promise<ProviderUsage> {
   const auth = parseJson(await deps.readText(authPath), authPath);
   let token = parseCodexToken(auth);
   if (isExpiring(token, deps.nowMs())) {
-    if (!token.refreshToken) throw new Error('Codex access token is expiring and no refresh token is available');
-    token = await refreshToken(deps, CODEX_REFRESH_URL, token.refreshToken, CODEX_CLIENT_ID);
-    setCodexToken(auth, token);
-    await deps.writeText(authPath, JSON.stringify(auth, null, 2));
+    if (!token.refreshToken) {
+      if (isExpired(token, deps.nowMs())) throw new Error('Codex access token is expired and no refresh token is available');
+    } else {
+      let refreshed = false;
+      try {
+        token = await refreshToken(deps, CODEX_REFRESH_URL, token.refreshToken, CODEX_CLIENT_ID);
+        refreshed = true;
+      } catch (error) {
+        if (isExpired(token, deps.nowMs())) throw error;
+      }
+      if (refreshed) {
+        setCodexToken(auth, token, deps.nowMs());
+        await deps.writeText(authPath, JSON.stringify(auth, null, 2));
+      }
+    }
   }
 
   const baseUrl = parseCodexBaseUrl(await readOptionalCodexConfig(deps));
@@ -185,10 +212,21 @@ async function fetchClaudeUsage(deps: FetchDeps): Promise<ProviderUsage> {
   const credentials = parseJson(await deps.readText(credentialsPath), credentialsPath);
   let token = parseClaudeToken(credentials);
   if (isExpiring(token, deps.nowMs())) {
-    if (!token.refreshToken) throw new Error('Claude access token is expiring and no refresh token is available');
-    token = await refreshToken(deps, CLAUDE_REFRESH_URL, token.refreshToken, CLAUDE_CLIENT_ID);
-    setClaudeToken(credentials, token);
-    await deps.writeText(credentialsPath, JSON.stringify(credentials, null, 2));
+    if (!token.refreshToken) {
+      if (isExpired(token, deps.nowMs())) throw new Error('Claude access token is expired and no refresh token is available');
+    } else {
+      let refreshed = false;
+      try {
+        token = await refreshToken(deps, CLAUDE_REFRESH_URL, token.refreshToken, CLAUDE_CLIENT_ID);
+        refreshed = true;
+      } catch (error) {
+        if (isExpired(token, deps.nowMs())) throw error;
+      }
+      if (refreshed) {
+        setClaudeToken(credentials, token);
+        await deps.writeText(credentialsPath, JSON.stringify(credentials, null, 2));
+      }
+    }
   }
 
   const response = await deps.fetch(CLAUDE_USAGE_URL, {
