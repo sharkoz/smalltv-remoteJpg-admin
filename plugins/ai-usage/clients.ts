@@ -88,7 +88,10 @@ function parseCodexToken(auth: Record<string, unknown>): OAuthTokenSet {
   return {
     accessToken,
     refreshToken: stringAt(tokens, 'refresh_token') ?? stringAt(tokens, 'refreshToken'),
-    expiresAtMs: explicitExpiresAtMs ?? (lastRefreshMs === undefined ? undefined : lastRefreshMs + CODEX_ACCESS_TOKEN_TTL_MS),
+    expiresAtMs:
+      lastRefreshMs === undefined
+        ? explicitExpiresAtMs
+        : Math.max(explicitExpiresAtMs ?? 0, lastRefreshMs + CODEX_ACCESS_TOKEN_TTL_MS),
   };
 }
 
@@ -129,13 +132,36 @@ async function parseResponseJson(response: Response, label: string): Promise<unk
   return response.json();
 }
 
-async function refreshToken(deps: FetchDeps, url: string, refreshTokenValue: string, clientId?: string): Promise<OAuthTokenSet> {
+async function refreshClaudeToken(deps: FetchDeps, refreshTokenValue: string): Promise<OAuthTokenSet> {
   const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshTokenValue });
-  if (clientId) body.set('client_id', clientId);
-  const response = await deps.fetch(url, {
+  body.set('client_id', CLAUDE_CLIENT_ID);
+  const response = await deps.fetch(CLAUDE_REFRESH_URL, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
     body,
+  });
+  const raw = asRecord(await parseResponseJson(response, 'OAuth refresh'));
+  if (!raw) throw new Error('OAuth refresh response must be a JSON object');
+  const accessToken = stringAt(raw, 'access_token') ?? stringAt(raw, 'accessToken');
+  if (!accessToken) throw new Error('OAuth refresh response missing access token');
+  const expiresIn = numberAt(raw, 'expires_in') ?? numberAt(raw, 'expiresIn');
+  return {
+    accessToken,
+    refreshToken: stringAt(raw, 'refresh_token') ?? stringAt(raw, 'refreshToken') ?? refreshTokenValue,
+    expiresAtMs: expiresIn === undefined ? undefined : deps.nowMs() + expiresIn * 1000,
+  };
+}
+
+async function refreshCodexToken(deps: FetchDeps, refreshTokenValue: string): Promise<OAuthTokenSet> {
+  const response = await deps.fetch(CODEX_REFRESH_URL, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
+    body: JSON.stringify({
+      client_id: CODEX_CLIENT_ID,
+      grant_type: 'refresh_token',
+      refresh_token: refreshTokenValue,
+      scope: 'openid profile email',
+    }),
   });
   const raw = asRecord(await parseResponseJson(response, 'OAuth refresh'));
   if (!raw) throw new Error('OAuth refresh response must be a JSON object');
@@ -186,7 +212,7 @@ async function fetchCodexUsage(deps: FetchDeps): Promise<ProviderUsage> {
     } else {
       let refreshed = false;
       try {
-        token = await refreshToken(deps, CODEX_REFRESH_URL, token.refreshToken, CODEX_CLIENT_ID);
+        token = await refreshCodexToken(deps, token.refreshToken);
         refreshed = true;
       } catch (error) {
         if (isExpired(token, deps.nowMs())) throw error;
@@ -217,7 +243,7 @@ async function fetchClaudeUsage(deps: FetchDeps): Promise<ProviderUsage> {
     } else {
       let refreshed = false;
       try {
-        token = await refreshToken(deps, CLAUDE_REFRESH_URL, token.refreshToken, CLAUDE_CLIENT_ID);
+        token = await refreshClaudeToken(deps, token.refreshToken);
         refreshed = true;
       } catch (error) {
         if (isExpired(token, deps.nowMs())) throw error;

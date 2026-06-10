@@ -273,7 +273,13 @@ describe('ai-usage clients', () => {
       'https://auth.openai.com/oauth/token',
       expect.objectContaining({
         method: 'POST',
-        body: expect.any(URLSearchParams),
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          client_id: 'app_EMoamEEZ73f0CkXaXp7hrann',
+          grant_type: 'refresh_token',
+          refresh_token: 'codex-refresh',
+          scope: 'openid profile email',
+        }),
       }),
     );
     expect(fetch).toHaveBeenNthCalledWith(
@@ -289,6 +295,54 @@ describe('ai-usage clients', () => {
     );
     const persisted = JSON.parse(writeText.mock.calls[0]?.[1] as string);
     expect(persisted.tokens).toMatchObject({ access_token: 'new-codex-access', refresh_token: 'new-codex-refresh' });
+  });
+
+  it('uses refreshed Codex last_refresh instead of stale expires_at when refresh omits expires_in', async () => {
+    let storedAuth = JSON.stringify({
+      tokens: {
+        access_token: 'old-codex-access',
+        refresh_token: 'codex-refresh',
+        expires_at: 1_779_000_000,
+      },
+      last_refresh: '2026-05-28T19:31:39.000Z',
+    });
+    const readText = vi.fn(async (path: string) => {
+      if (path === '/home/me/.codex/auth.json') return storedAuth;
+      if (path === '/home/me/.codex/config.toml') return '';
+      throw new Error(`unexpected read ${path}`);
+    });
+    const writeText = vi.fn(async (_path: string, text: string) => {
+      storedAuth = text;
+    });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'new-codex-access', refresh_token: 'new-codex-refresh' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(codexPayload), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(codexPayload), { status: 200 }));
+    const usageFetcher = createAiUsageFetcher(
+      {
+        nowMs: () => 1_780_000_000_000,
+        readText,
+        writeText,
+        fetch,
+        homeDir: () => '/home/me',
+      },
+      { ttlMs: 0 },
+    );
+
+    await usageFetcher.fetch('codex');
+    await usageFetcher.fetch('codex');
+
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenNthCalledWith(1, 'https://auth.openai.com/oauth/token', expect.any(Object));
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      'https://chatgpt.com/backend-api/wham/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer new-codex-access' }),
+      }),
+    );
+    expect(writeText).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes near-expiry Claude credentials with Anthropic client id', async () => {
