@@ -10,6 +10,14 @@ export const manifest: PluginManifest = {
   configFields: [
     { key: 'title', label: 'Title', type: 'string', default: 'AI Usage' },
     {
+      key: 'providers',
+      label: 'Providers',
+      type: 'string',
+      default: 'claude,codex',
+      placeholder: 'claude,codex',
+      description: 'Comma- or space-separated providers: claude, codex.',
+    },
+    {
       key: 'mode',
       label: 'Layout mode',
       type: 'select',

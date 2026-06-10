@@ -3,9 +3,14 @@ import type { AiUsageConfig, ProviderUsage, Severity, UsageWindow } from './type
 
 const providerSchema = z.enum(['claude', 'codex']);
 
+const providersSchema = z.preprocess(
+  (value) => (typeof value === 'string' ? value.split(/[\s,]+/).filter(Boolean) : value),
+  z.array(providerSchema).min(1).max(2).default(['claude', 'codex']),
+);
+
 export const aiUsageConfigSchema = z
   .object({
-    providers: z.array(providerSchema).min(1).max(2).default(['claude', 'codex']),
+    providers: providersSchema,
     title: z.string().default('AI Usage'),
     mode: z.enum(['auto', 'single', 'both']).default('auto'),
     showCredits: z.boolean().default(true),

@@ -55,6 +55,8 @@ describe('ai-usage config', () => {
     expect(manifest.rerenderIntervalMs).toBe(60_000);
     expect(manifest.configSchema).toBeDefined();
     expect(manifest.configSchema!.safeParse(manifest.exampleConfig).success).toBe(true);
+    expect(manifest.configFields?.some((field) => field.key === 'providers')).toBe(true);
+
 
     const { ctx } = testCtx({ title: 'Usage Now', providers: ['claude'], mode: 'single' });
     expect(render(ctx)).toContain('Usage Now');
@@ -68,6 +70,13 @@ describe('ai-usage config', () => {
       showCredits: true,
       showReview: true,
       theme: 'dark',
+    });
+  });
+
+  it('normalizes a form-backed single provider string with single mode', () => {
+    expect(normalizeConfig({ providers: 'claude', mode: 'single' })).toMatchObject({
+      providers: ['claude'],
+      mode: 'single',
     });
   });
 
