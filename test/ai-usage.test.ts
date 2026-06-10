@@ -138,7 +138,7 @@ describe('ai-usage plugin render', () => {
     expect(html).toContain('Codex');
   });
 
-  it('renders provider errors when fetch throws without logging secrets', async () => {
+  it('renders safe provider errors when fetch throws without logging secrets', async () => {
     fetchProvider.mockReset();
     fetchProvider.mockRejectedValue(new Error('token abc123 failed'));
     const { ctx, logs } = testCtx({ providers: ['codex'], mode: 'single', title: 'AI Usage' });
@@ -146,7 +146,8 @@ describe('ai-usage plugin render', () => {
     const html = await render(ctx);
 
     expect(html).toContain('Codex');
-    expect(html).toContain('token abc123 failed');
+    expect(html).toContain('Codex usage unavailable');
+    expect(html).not.toContain('token abc123 failed');
     expect(logs).toContainEqual({
       level: 'warn',
       message: 'ai-usage provider degraded',
@@ -186,6 +187,9 @@ describe('ai-usage renderer', () => {
     expect(html).toContain('5h 42%');
     expect(html).toContain('7d 69%');
     expect(html).toContain('Credits 3');
+    expect(html).toContain('.cards{display:grid;grid-template-columns:1fr;gap:7px;flex:1;min-height:0}');
+    expect(html).toContain('.cards.dual{grid-template-columns:1fr 1fr}');
+    expect(html).not.toContain('.dual{display:flex');
   });
 
   it('renders provider-specific error card when no usage is available', () => {

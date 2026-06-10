@@ -45,6 +45,8 @@ export const manifest: PluginManifest = {
 };
 
 
+const providerUnavailableMessage = (provider: ProviderUsage['provider']): string => `${provider === 'claude' ? 'Claude' : 'Codex'} usage unavailable`;
+
 export const render: RenderFn = async (ctx) => {
   const cfg = aiUsageConfigSchema.parse(ctx.config);
   const usages: ProviderUsage[] = [];
@@ -65,7 +67,7 @@ export const render: RenderFn = async (ctx) => {
         weekly: null,
         status: 'error',
         fetchedAt: null,
-        error: error instanceof Error ? error.message : String(error),
+        error: providerUnavailableMessage(provider),
       });
     }
   }
