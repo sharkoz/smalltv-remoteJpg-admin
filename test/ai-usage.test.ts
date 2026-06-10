@@ -174,6 +174,117 @@ describe('ai-usage clients', () => {
     expect(usage).toMatchObject({ provider: 'codex', status: 'ok', session: { usedPercent: 42 }, weekly: { usedPercent: 69 } });
   });
 
+  it('sends Codex account id from token block as ChatGPT-Account-Id', async () => {
+    const readText = vi.fn(async (path: string) => {
+      if (path === '/home/me/.codex/auth.json') {
+        return JSON.stringify({
+          tokens: {
+            access_token: 'codex-access',
+            refresh_token: 'codex-refresh',
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+            account_id: 'acct_tokens',
+          },
+        });
+      }
+      if (path === '/home/me/.codex/config.toml') return '';
+      throw new Error(`unexpected read ${path}`);
+    });
+    const fetch = vi.fn(async () => new Response(JSON.stringify(codexPayload), { status: 200 }));
+    const usageFetcher = createAiUsageFetcher({
+      nowMs: () => 1_779_990_000_000,
+      readText,
+      writeText: vi.fn(),
+      fetch,
+      homeDir: () => '/home/me',
+    });
+
+    await usageFetcher.fetch('codex');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://chatgpt.com/backend-api/wham/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'ChatGPT-Account-Id': 'acct_tokens',
+        }),
+      }),
+    );
+  });
+
+  it('uses wham usage path for configured Codex backend-api base URLs', async () => {
+    const readText = vi.fn(async (path: string) => {
+      if (path === '/home/me/.codex/auth.json') {
+        return JSON.stringify({
+          tokens: {
+            access_token: 'codex-access',
+            refresh_token: 'codex-refresh',
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+          },
+        });
+      }
+      if (path === '/home/me/.codex/config.toml') return 'chatgpt_base_url = "https://example.test/backend-api"';
+      throw new Error(`unexpected read ${path}`);
+    });
+    const fetch = vi.fn(async () => new Response(JSON.stringify(codexPayload), { status: 200 }));
+    const usageFetcher = createAiUsageFetcher({
+      nowMs: () => 1_779_990_000_000,
+      readText,
+      writeText: vi.fn(),
+      fetch,
+      homeDir: () => '/home/me',
+    });
+
+    await usageFetcher.fetch('codex');
+
+    expect(fetch).toHaveBeenCalledWith('https://example.test/backend-api/wham/usage', expect.any(Object));
+  });
+
+  it('refreshes near-expiry Claude credentials with Anthropic client id', async () => {
+    const readText = vi.fn(async (path: string) => {
+      expect(path).toBe('/home/me/.claude/.credentials.json');
+      return JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'old-claude-access',
+          refreshToken: 'claude-refresh',
+          expiresAt: 1_780_000_001_000,
+        },
+      });
+    });
+    const writeText = vi.fn();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'new-claude-access', expires_in: 3600 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(claudePayload), { status: 200 }));
+    const usageFetcher = createAiUsageFetcher({
+      nowMs: () => 1_780_000_000_000,
+      readText,
+      writeText,
+      fetch,
+      homeDir: () => '/home/me',
+    });
+
+    await usageFetcher.fetch('claude');
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'https://console.anthropic.com/v1/oauth/token',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(URLSearchParams),
+      }),
+    );
+    const refreshBody = fetch.mock.calls[0]?.[1]?.body;
+    expect(refreshBody).toBeInstanceOf(URLSearchParams);
+    expect(refreshBody.get('client_id')).toBe('9d1c250a-e61b-44d9-88ed-5944d1962f5e');
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer new-claude-access' }),
+      }),
+    );
+    expect(writeText).toHaveBeenCalled();
+  });
+
   it('fetches Claude usage using claudeAiOauth credentials', async () => {
     const readText = vi.fn(async (path: string) => {
       expect(path).toBe('/home/me/.claude/.credentials.json');

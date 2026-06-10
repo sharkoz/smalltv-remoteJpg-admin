@@ -10,6 +10,7 @@ const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 const CODEX_DEFAULT_BASE_URL = 'https://chatgpt.com/backend-api';
 const CODEX_REFRESH_URL = 'https://auth.openai.com/oauth/token';
 const CLAUDE_REFRESH_URL = 'https://console.anthropic.com/v1/oauth/token';
+const CLAUDE_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 const CLAUDE_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 const USER_AGENT = 'smalltv-screens-ai-usage/0.1';
 
@@ -133,12 +134,22 @@ async function refreshToken(deps: FetchDeps, url: string, refreshTokenValue: str
 }
 
 function codexAccountId(auth: Record<string, unknown>): string | undefined {
-  return stringAt(auth, 'last_active_account_id') ?? stringAt(auth, 'chatgpt_account_id') ?? stringAt(auth, 'account_id');
+  const tokens = asRecord(auth.tokens);
+  return (
+    (tokens ? stringAt(tokens, 'account_id') : undefined) ??
+    stringAt(auth, 'last_active_account_id') ??
+    stringAt(auth, 'chatgpt_account_id') ??
+    stringAt(auth, 'account_id')
+  );
 }
 
 function parseCodexBaseUrl(configToml: string): string {
   const match = /^\s*chatgpt_base_url\s*=\s*["']([^"']+)["']/m.exec(configToml);
   return match?.[1]?.replace(/\/+$/, '') ?? CODEX_DEFAULT_BASE_URL;
+}
+
+function codexUsagePath(baseUrl: string): string {
+  return baseUrl.includes('/backend-api') ? '/wham/usage' : '/api/codex/usage';
 }
 
 async function readOptionalCodexConfig(deps: FetchDeps): Promise<string> {
@@ -161,7 +172,7 @@ async function fetchCodexUsage(deps: FetchDeps): Promise<ProviderUsage> {
   }
 
   const baseUrl = parseCodexBaseUrl(await readOptionalCodexConfig(deps));
-  const usagePath = baseUrl === CODEX_DEFAULT_BASE_URL ? '/wham/usage' : '/api/codex/usage';
+  const usagePath = codexUsagePath(baseUrl);
   const headers: Record<string, string> = { Authorization: `Bearer ${token.accessToken}`, Accept: 'application/json', 'User-Agent': USER_AGENT };
   const accountId = codexAccountId(auth);
   if (accountId) headers['ChatGPT-Account-Id'] = accountId;
@@ -175,7 +186,7 @@ async function fetchClaudeUsage(deps: FetchDeps): Promise<ProviderUsage> {
   let token = parseClaudeToken(credentials);
   if (isExpiring(token, deps.nowMs())) {
     if (!token.refreshToken) throw new Error('Claude access token is expiring and no refresh token is available');
-    token = await refreshToken(deps, CLAUDE_REFRESH_URL, token.refreshToken);
+    token = await refreshToken(deps, CLAUDE_REFRESH_URL, token.refreshToken, CLAUDE_CLIENT_ID);
     setClaudeToken(credentials, token);
     await deps.writeText(credentialsPath, JSON.stringify(credentials, null, 2));
   }
