@@ -241,9 +241,9 @@ export const manifest: PluginManifest = {
   rerenderIntervalMs: 30 * 60_000,
   configSchema,
   configFields: [
-    { key: 'city', label: 'City', type: 'string', default: 'Paris', required: true, description: 'Display name of the location.' },
-    { key: 'lat', label: 'Latitude', type: 'number', default: 48.85, min: -90, max: 90, step: 0.0001, required: true, description: 'Geographic latitude (e.g. 48.85 for Paris).' },
-    { key: 'lon', label: 'Longitude', type: 'number', default: 2.35, min: -180, max: 180, step: 0.0001, required: true, description: 'Geographic longitude (e.g. 2.35 for Paris).' },
+    { key: 'city', label: 'Location', type: 'location', default: 'Paris', required: true, latKey: 'lat', lonKey: 'lon', placeholder: 'Search for a city…', description: 'Type a city name and select from the list — coordinates are filled automatically.' },
+    { key: 'lat', label: 'Latitude', type: 'number', default: 48.85, min: -90, max: 90, step: 0.0001 },
+    { key: 'lon', label: 'Longitude', type: 'number', default: 2.35, min: -180, max: 180, step: 0.0001 },
     { key: 'mode', label: 'Mode', type: 'select', default: 'simple', options: [{ value: 'simple', label: 'Simple – current conditions' }, { value: 'advanced', label: 'Advanced – 5-day forecast' }] },
     { key: 'unit', label: 'Temperature unit', type: 'select', default: 'celsius', options: [{ value: 'celsius', label: '°C – Celsius' }, { value: 'fahrenheit', label: '°F – Fahrenheit' }] },
     { key: 'accentColor', label: 'Accent color', type: 'color', default: '#60a5fa' },
