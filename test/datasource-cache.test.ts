@@ -46,6 +46,13 @@ describe('DataCache', () => {
     expect(cache.snapshot('d1', 'main')).toMatchObject({ ok: true, value: { price: 42 }, stale: false });
   });
 
+  it('detects when the resolved request changed', async () => {
+    const cache = new DataCache(new ScriptedFetcher([{ ok: true, value: { price: 42 } }]), new FakeClock(0));
+    await cache.refresh('d1', decl, resolver);
+    expect(cache.matchesRequest('d1', decl, resolver)).toBe(true);
+    expect(cache.matchesRequest('d1', decl, (s) => s.replace('{{config.path}}', 'eth').replace('{{secret.key}}', 'topsecret'))).toBe(false);
+  });
+
   it('marks a value stale once it is overdue past the refresh interval', async () => {
     const clock = new FakeClock(0);
     const cache = new DataCache(new ScriptedFetcher([{ ok: true, value: 1 }]), clock);

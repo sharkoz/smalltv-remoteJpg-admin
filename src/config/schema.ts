@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeThemeName, THEME_NAMES } from '../theme/palette.js';
 
 /** Structural validation of config.json. Plugin-specific `config` validation
  * happens later against each plugin's configSchema (see registry). */
@@ -8,9 +9,15 @@ export const dashboardAssignmentSchema = z.object({
   displayDurationMs: z.number().int().positive(),
 });
 
+const themeSchema = z.preprocess(
+  (value) => (typeof value === 'string' ? normalizeThemeName(value) : value),
+  z.enum(THEME_NAMES),
+);
+
 export const deviceSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  theme: themeSchema.optional(),
   pollIntervalMs: z.number().int().positive(),
   assignments: z.array(dashboardAssignmentSchema).default([]),
 });
@@ -20,6 +27,7 @@ export const dashboardSchema = z.object({
   pluginId: z.string().min(1),
   name: z.string().min(1),
   config: z.record(z.unknown()).default({}),
+  theme: themeSchema.optional(),
   displayDurationMs: z.number().int().positive(),
 });
 

@@ -1,4 +1,5 @@
 import type { ZodTypeAny } from 'zod';
+import type { ThemePalette } from '../theme/palette.js';
 
 /**
  * The plugin contract. A plugin is a directory under `plugins/` exporting a
@@ -129,6 +130,8 @@ export interface RenderContext {
   now: Date;
   /** Brick composition helpers. */
   brick: BrickHelpers;
+  /** Global visual palette selected in config.json. */
+  theme: ThemePalette;
   /** Emit diagnostics (visible per-dashboard in the admin UI). */
   log: PluginLogger;
 }

@@ -19,11 +19,12 @@ describe('plugin loader', () => {
     expect(loaded).toEqual([]);
   });
 
-  it('loads the real built-in plugins (clock, api-value, prometheus, ai-usage)', async () => {
+  it('loads the real built-in plugins (clock, api-value, prometheus, stocks, ai-usage)', async () => {
     const builtinDir = join(here, '..', 'plugins');
     const loaded = await loadPluginsFrom(builtinDir);
     const ids = loaded.map((p) => p.manifest.id).sort();
     expect(ids).toEqual(['ai-usage', 'api-value', 'clock', 'prometheus']);
+
   });
 
   it('every built-in plugin ships an exampleConfig that passes its own configSchema', async () => {

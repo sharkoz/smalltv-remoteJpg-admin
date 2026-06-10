@@ -12,6 +12,7 @@ import type { AuthService } from '../auth/service.js';
 import { registerAuthGuard } from './guard.js';
 import { registerAuthRoutes } from './auth-routes.js';
 import { registerUi } from './ui.js';
+import { DEFAULT_THEME_NAME, THEME_NAMES } from '../theme/palette.js';
 
 export interface ServerDeps {
   engine: Engine;
@@ -68,6 +69,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       exampleConfig: p.manifest.exampleConfig ?? {},
     })),
   );
+
+  app.get('/admin/config', async () => ({ defaultTheme: DEFAULT_THEME_NAME, themes: THEME_NAMES }));
 
   app.get('/admin/devices', async () => store.getDevices());
   app.get('/admin/dashboards', async () => store.getDashboards());
@@ -149,7 +152,21 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     } catch (err) {
       return reply.code(400).send({ error: String(err instanceof Error ? err.message : err) });
     }
+    const previous = store.getDashboard(dashboard.id);
     store.upsertDashboard(dashboard);
+    if (previous && previous.displayDurationMs !== dashboard.displayDurationMs) {
+      for (const device of store.getDevices()) {
+        let changed = false;
+        const assignments = device.assignments.map((assignment) => {
+          if (assignment.dashboardId !== dashboard.id || assignment.displayDurationMs !== previous.displayDurationMs) {
+            return assignment;
+          }
+          changed = true;
+          return { ...assignment, displayDurationMs: dashboard.displayDurationMs };
+        });
+        if (changed) store.upsertDevice({ ...device, assignments });
+      }
+    }
     return reply.code(201).send({ dashboard });
   });
 

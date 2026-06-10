@@ -26,6 +26,10 @@ export class ImageCache {
 
   invalidate(dashboardId: string): void {
     this.images.delete(dashboardId);
+    const prefix = `${dashboardId}::`;
+    for (const key of this.images.keys()) {
+      if (key.startsWith(prefix)) this.images.delete(key);
+    }
   }
 
   /** Age of a cached image in ms, or Infinity if absent. */

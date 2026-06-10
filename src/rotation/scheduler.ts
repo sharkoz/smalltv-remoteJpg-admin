@@ -59,10 +59,11 @@ export function nextDashboardId(slots: RotationSlot[], nowMs: number): string | 
  * per offending slot.
  */
 export function skipWarnings(slots: RotationSlot[], pollIntervalMs: number): string[] {
+  const fmtSeconds = (ms: number): string => (Math.round((ms / 1000) * 1000) / 1000).toString();
   return slots
     .filter((s) => s.displayDurationMs < pollIntervalMs)
     .map(
       (s) =>
-        `Dashboard "${s.dashboardId}" shows for ${s.displayDurationMs}ms but the device polls every ${pollIntervalMs}ms — it may be skipped.`,
+        `Dashboard "${s.dashboardId}" shows for ${fmtSeconds(s.displayDurationMs)}s but the device polls every ${fmtSeconds(pollIntervalMs)}s — it may be skipped.`,
     );
 }

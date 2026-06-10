@@ -1,11 +1,12 @@
 import type { DataSourceDecl, DataResult } from '../plugins/types.js';
-import type { Fetcher } from './types.js';
+import type { Fetcher, FetchRequest } from './types.js';
 import type { Clock } from '../util/time.js';
 import { systemClock } from '../util/time.js';
 
 interface Entry {
   result: DataResult;
   refreshIntervalMs: number;
+  requestKey: string;
 }
 
 /** A string template resolver bound to one dashboard's config + secrets. */
@@ -30,28 +31,43 @@ export class DataCache {
     return `${dashboardId}::${sourceId}`;
   }
 
+  private requestFor(decl: DataSourceDecl, resolve: Resolver): FetchRequest {
+    const headers = decl.headers
+      ? Object.fromEntries(Object.entries(decl.headers).map(([k, v]) => [k, resolve(v)]))
+      : undefined;
+    return {
+      url: resolve(decl.url),
+      headers,
+      timeoutMs: decl.timeoutMs,
+      responseType: decl.responseType ?? 'json',
+    };
+  }
+
+  private requestKey(req: FetchRequest): string {
+    return JSON.stringify(req);
+  }
+
+  /** True when the cached value was fetched with the same resolved request. */
+  matchesRequest(dashboardId: string, decl: DataSourceDecl, resolve: Resolver): boolean {
+    const entry = this.entries.get(this.key(dashboardId, decl.id));
+    return Boolean(entry && entry.requestKey === this.requestKey(this.requestFor(decl, resolve)));
+  }
+
   /** Fetch a source for a dashboard and store the outcome. Never throws.
    * Returns true if the stored value changed (used to invalidate rendered images). */
   async refresh(dashboardId: string, decl: DataSourceDecl, resolve: Resolver): Promise<boolean> {
     const key = this.key(dashboardId, decl.id);
     const prev = this.entries.get(key)?.result;
-
-    const headers = decl.headers
-      ? Object.fromEntries(Object.entries(decl.headers).map(([k, v]) => [k, resolve(v)]))
-      : undefined;
-
-    const outcome = await this.fetcher.fetch({
-      url: resolve(decl.url),
-      headers,
-      timeoutMs: decl.timeoutMs,
-      responseType: decl.responseType ?? 'json',
-    });
+    const req = this.requestFor(decl, resolve);
+    const requestKey = this.requestKey(req);
+    const outcome = await this.fetcher.fetch(req);
 
     if (outcome.ok) {
       const changed = JSON.stringify(prev?.value) !== JSON.stringify(outcome.value);
       this.entries.set(key, {
         result: { ok: true, value: outcome.value, stale: false, fetchedAt: this.clock.nowMs() },
         refreshIntervalMs: decl.refreshIntervalMs,
+        requestKey,
       });
       return changed;
     }
@@ -68,6 +84,7 @@ export class DataCache {
         fetchedAt: prev?.fetchedAt,
       },
       refreshIntervalMs: decl.refreshIntervalMs,
+      requestKey,
     });
     // The visible value didn't change, but a fresh failure should surface the
     // stale marker once (re-render the first time it goes stale).

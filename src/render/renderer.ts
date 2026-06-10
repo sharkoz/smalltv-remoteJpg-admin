@@ -2,7 +2,7 @@ import type { BrowserPool } from './browser.js';
 import { SCREEN_SIZE } from '../plugins/brick.js';
 
 export interface RenderOptions {
-  /** JPEG quality 0-100. Default 80. */
+  /** JPEG quality 0-100. Default 100 to preserve sharp small-screen graphs. */
   quality?: number;
   /** Small fixed delay after fonts are ready, to let layout settle. Default 50. */
   settleMs?: number;
@@ -22,7 +22,7 @@ export class Renderer implements RendererLike {
   constructor(private readonly pool: BrowserPool) {}
 
   async renderHtmlToJpg(html: string, opts: RenderOptions = {}): Promise<Buffer> {
-    const { quality = 80, settleMs = 50 } = opts;
+    const { quality = 100, settleMs = 50 } = opts;
     return this.pool.withPage(async (page) => {
       await page.setContent(html, { waitUntil: 'domcontentloaded' });
       // Give webfonts/layout a brief moment, bounded so a slow page can't hang.

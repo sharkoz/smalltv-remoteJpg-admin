@@ -38,6 +38,7 @@ export const manifest: PluginManifest = {
 
 export const render: RenderFn = (ctx) => {
   const cfg = configSchema.parse(ctx.config);
+  const theme = ctx.theme;
   const timeFmt = new Intl.DateTimeFormat('en-GB', {
     timeZone: cfg.timezone,
     hour: '2-digit',
@@ -56,10 +57,10 @@ export const render: RenderFn = (ctx) => {
 
   return ctx.brick.screen(
     ctx.brick.stack([
-      cfg.label ? ctx.brick.text({ content: cfg.label, size: 16, color: '#7fb0ff' }) : '',
+      cfg.label ? ctx.brick.text({ content: cfg.label, size: 16, color: theme.accent }) : '',
       ctx.brick.text({ content: time, size: 64, weight: 700 }),
-      ctx.brick.text({ content: date, size: 20, color: '#aaaaaa' }),
+      ctx.brick.text({ content: date, size: 20, color: theme.muted }),
     ]),
-    { bg: '#0b0f1a' },
+    { bg: theme.bg, color: theme.text, font: theme.font },
   );
 };

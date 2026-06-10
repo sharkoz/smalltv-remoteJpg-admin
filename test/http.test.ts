@@ -90,9 +90,17 @@ describe('HTTP routes', () => {
     const res = await app.inject({ method: 'GET', url: '/admin/plugins' });
     const plugins = res.json() as Array<{ id: string; exampleConfig: Record<string, unknown> }>;
     const ids = plugins.map((p) => p.id).sort();
-    expect(ids).toEqual(['ai-usage', 'api-value', 'clock', 'prometheus']);
+
+    expect(ids).toEqual(['ai-usage', 'api-value', 'clock', 'prometheus', 'stocks']);
+
     const clock = plugins.find((p) => p.id === 'clock')!;
     expect(clock.exampleConfig).toMatchObject({ timezone: 'Europe/Paris' });
+  });
+
+  it('GET /admin/config exposes available themes and the technical fallback', async () => {
+    const before = await app.inject({ method: 'GET', url: '/admin/config' });
+    expect(before.statusCode).toBe(200);
+    expect(before.json()).toMatchObject({ defaultTheme: 'dark', themes: ['dark', 'black', 'light', 'terminal'] });
   });
 
   it('POST /admin/dashboards validates config and persists', async () => {
@@ -102,6 +110,28 @@ describe('HTTP routes', () => {
     });
     expect(ok.statusCode).toBe(201);
     expect(store.getDashboard('fx')).toBeDefined();
+  });
+
+  it('updates device slot durations that still use a dashboard default', async () => {
+    const ok = await app.inject({
+      method: 'POST', url: '/admin/dashboards',
+      payload: { id: 'clock-paris', pluginId: 'clock', name: 'Paris', config: { timezone: 'Europe/Paris', label: 'PARIS' }, displayDurationMs: 3000 },
+    });
+    expect(ok.statusCode).toBe(201);
+    expect(store.getDevice('kitchen')!.assignments[0]!.displayDurationMs).toBe(3000);
+  });
+
+  it('does not overwrite device slot duration overrides when dashboard duration changes', async () => {
+    store.upsertDevice({
+      id: 'custom', name: 'Custom', pollIntervalMs: 2000,
+      assignments: [{ dashboardId: 'clock-paris', displayDurationMs: 7000 }],
+    });
+    const ok = await app.inject({
+      method: 'POST', url: '/admin/dashboards',
+      payload: { id: 'clock-paris', pluginId: 'clock', name: 'Paris', config: { timezone: 'Europe/Paris', label: 'PARIS' }, displayDurationMs: 3000 },
+    });
+    expect(ok.statusCode).toBe(201);
+    expect(store.getDevice('custom')!.assignments[0]!.displayDurationMs).toBe(7000);
   });
 
   it('generates a hidden slug id when none is provided, and de-duplicates', async () => {
@@ -146,6 +176,15 @@ describe('HTTP routes', () => {
     });
     expect(ok.statusCode).toBe(201);
     expect(ok.json().warnings).toHaveLength(1); // 1000ms slot < 5000ms poll interval
+  });
+
+  it('POST /admin/devices accepts a theme override', async () => {
+    const ok = await app.inject({
+      method: 'POST', url: '/admin/devices',
+      payload: { id: 'themed', name: 'Themed', theme: 'terminal', pollIntervalMs: 5000, assignments: [{ dashboardId: 'clock-paris', displayDurationMs: 10000 }] },
+    });
+    expect(ok.statusCode).toBe(201);
+    expect(store.getDevice('themed')!.theme).toBe('terminal');
   });
 
   it('DELETE /admin/devices/:id reports removal', async () => {

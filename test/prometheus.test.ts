@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { manifest, render } from '../plugins/prometheus/index.js';
 import { makeBricks } from '../src/plugins/brick.js';
 import { resolveTemplate, SecretStore } from '../src/config/secrets.js';
+import { DEFAULT_THEME } from '../src/theme/palette.js';
 import type { DataResult, RenderContext } from '../src/plugins/types.js';
 
 interface Captured { level: string; message: string; meta?: unknown }
@@ -10,7 +11,7 @@ function ctxWith(config: Record<string, unknown>, series: DataResult): { ctx: Re
   const logs: Captured[] = [];
   const mk = (level: string) => (message: string, meta?: unknown) => logs.push({ level, message, meta });
   const log = { debug: mk('debug'), info: mk('info'), warn: mk('warn'), error: mk('error') };
-  return { ctx: { dashboardId: 'p', config, data, now: new Date(0), brick: makeBricks(data), log }, logs };
+  return { ctx: { dashboardId: 'p', config, data, now: new Date(0), brick: makeBricks(data), theme: DEFAULT_THEME, log }, logs };
 }
 
 const matrix = {
