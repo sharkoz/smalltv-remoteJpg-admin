@@ -57,6 +57,21 @@
       "displayDurationMs": 15000
     },
     {
+      "id": "ai",
+      "pluginId": "ai-usage",
+      "name": "ai",
+      "config": {
+        "providers": [
+          "claude",
+          "codex"
+        ],
+        "title": "AI Usage",
+        "mode": "auto",
+        "showCredits": false,
+        "showReview": false,
+        "theme": "dark"
+    },
+    {
       "id": "weather-paris-simple",
       "pluginId": "weather",
       "name": "Paris Weather",

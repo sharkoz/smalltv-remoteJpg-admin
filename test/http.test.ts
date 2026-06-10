@@ -90,7 +90,9 @@ describe('HTTP routes', () => {
     const res = await app.inject({ method: 'GET', url: '/admin/plugins' });
     const plugins = res.json() as Array<{ id: string; exampleConfig: Record<string, unknown> }>;
     const ids = plugins.map((p) => p.id).sort();
-    expect(ids).toEqual(['api-value', 'clock', 'prometheus', 'stocks']);
+
+    expect(ids).toEqual(['ai-usage', 'api-value', 'clock', 'prometheus', 'stocks']);
+
     const clock = plugins.find((p) => p.id === 'clock')!;
     expect(clock.exampleConfig).toMatchObject({ timezone: 'Europe/Paris' });
   });

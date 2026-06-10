@@ -154,6 +154,17 @@ Data-source `url` and `headers` support these placeholders, resolved per render:
 
 - **clock** — timezone clock, no data source.
 - **api-value** — shows one value from a JSON API (`jsonPath`), with stale/fallback handling.
+- **ai-usage** — shows Claude Code and/or OpenAI Codex subscription quota usage on a 240×240 dashboard. It reads local CLI OAuth credentials (`~/.claude/.credentials.json` and/or `~/.codex/auth.json`), keeps tokens out of `config/config.json`, and displays 5h + 7d usage windows with stale/error fallbacks. Example dashboard config:
+  ```json
+  {
+    "providers": ["claude", "codex"],
+    "title": "AI Usage",
+    "mode": "auto",
+    "showCredits": true,
+    "showReview": true,
+    "theme": "dark"
+  }
+  ```
 - **prometheus** — graphs a PromQL query as an SVG sparkline via the Prometheus
   `query_range` API. Config: `baseUrl`, `query`, `rangeSeconds` (window), `step`,
   `label`, `unit`, `color`, `decimals`. Example dashboard config:

@@ -24,7 +24,7 @@ function restart() {
 start();
 
 let timer;
-const watcher = chokidar.watch('src', { ignoreInitial: true, usePolling: true, interval: 300 });
+const watcher = chokidar.watch(['src', 'plugins'], { ignoreInitial: true, usePolling: true, interval: 300 });
 watcher.on('all', (_event, path) => {
   if (!/\.(ts|js|mjs|json|html)$/.test(path)) return;
   clearTimeout(timer);
@@ -34,7 +34,7 @@ watcher.on('all', (_event, path) => {
   }, 150);
 });
 
-console.log('[dev:poll] polling src/ for changes (plugins/ hot-reload handled in-process)');
+console.log('[dev:poll] polling src/ and plugins/ for changes');
 
 function shutdown() {
   watcher.close();

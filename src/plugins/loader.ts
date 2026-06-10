@@ -78,7 +78,7 @@ export async function loadPlugin(
   }
   try {
     const base = pathToFileURL(entry).href;
-    const url = bust ? `${base}?v=${entryMtime(entry)}` : base;
+    const url = bust ? `${base}?v=${Date.now()}` : base;
     const mod = (await import(url)) as Partial<PluginModule>;
     if (!mod.manifest || typeof mod.render !== 'function') {
       logger.warn('Plugin missing manifest or render export; skipping', { dir });
@@ -129,10 +129,3 @@ export async function loadPluginsFrom(pluginsDir: string, bust = false): Promise
   return loaded;
 }
 
-function entryMtime(entry: string): number {
-  try {
-    return statSync(entry).mtimeMs;
-  } catch {
-    return 0;
-  }
-}
