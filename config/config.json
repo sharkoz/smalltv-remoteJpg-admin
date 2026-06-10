@@ -70,6 +70,8 @@
         "showCredits": false,
         "showReview": false,
         "theme": "dark"
+      },
+      "displayDurationMs": 15000
     },
     {
       "id": "weather-paris-simple",
