@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { makeBricks } from '../src/plugins/brick.js';
 import type { RenderContext } from '../src/plugins/types.js';
 import { manifest, render } from '../plugins/ai-usage/index.js';
@@ -12,6 +12,7 @@ import {
   parseCodexUsage,
   severityFor,
 } from '../plugins/ai-usage/parsers.js';
+import { createAiUsageFetcher } from '../plugins/ai-usage/clients.js';
 
 function testCtx(config: Record<string, unknown>): { ctx: RenderContext; logs: Array<{ level: string; message: string; meta?: unknown }> } {
   const data = {};
@@ -129,5 +130,110 @@ describe('ai-usage parsers', () => {
     expect(severityFor(50)).toBe('mid');
     expect(severityFor(79)).toBe('mid');
     expect(severityFor(80)).toBe('critical');
+  });
+});
+
+describe('ai-usage clients', () => {
+  it('fetches Codex usage from wham using auth.json credentials', async () => {
+    const readText = vi.fn(async (path: string) => {
+      if (path === '/home/me/.codex/auth.json') {
+        return JSON.stringify({
+          tokens: {
+            access_token: 'codex-access',
+            refresh_token: 'codex-refresh',
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+          },
+          last_active_account_id: 'acct_123',
+        });
+      }
+      if (path === '/home/me/.codex/config.toml') return '';
+      throw new Error(`unexpected read ${path}`);
+    });
+    const fetch = vi.fn(async () => new Response(JSON.stringify(codexPayload), { status: 200 }));
+    const usageFetcher = createAiUsageFetcher({
+      nowMs: () => 1_779_990_000_000,
+      readText,
+      writeText: vi.fn(),
+      fetch,
+      homeDir: () => '/home/me',
+    });
+
+    const usage = await usageFetcher.fetch('codex');
+
+    expect(readText).toHaveBeenCalledWith('/home/me/.codex/auth.json');
+    expect(fetch).toHaveBeenCalledWith(
+      'https://chatgpt.com/backend-api/wham/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer codex-access',
+          Accept: 'application/json',
+          'ChatGPT-Account-Id': 'acct_123',
+        }),
+      }),
+    );
+    expect(usage).toMatchObject({ provider: 'codex', status: 'ok', session: { usedPercent: 42 }, weekly: { usedPercent: 69 } });
+  });
+
+  it('fetches Claude usage using claudeAiOauth credentials', async () => {
+    const readText = vi.fn(async (path: string) => {
+      expect(path).toBe('/home/me/.claude/.credentials.json');
+      return JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'claude-access',
+          refreshToken: 'claude-refresh',
+          expiresAt: Date.now() + 3_600_000,
+        },
+      });
+    });
+    const fetch = vi.fn(async () => new Response(JSON.stringify(claudePayload), { status: 200 }));
+    const usageFetcher = createAiUsageFetcher({
+      nowMs: () => 1_780_000_000_000,
+      readText,
+      writeText: vi.fn(),
+      fetch,
+      homeDir: () => '/home/me',
+    });
+
+    const usage = await usageFetcher.fetch('claude');
+
+    expect(readText).toHaveBeenCalledWith('/home/me/.claude/.credentials.json');
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer claude-access',
+          Accept: 'application/json',
+          'anthropic-beta': 'oauth-2025-04-20',
+        }),
+      }),
+    );
+    expect(usage).toMatchObject({ provider: 'claude', status: 'ok', session: { usedPercent: 33 }, weekly: { usedPercent: 75 } });
+  });
+
+  it('returns stale last-good usage when an expired cache refresh hits a transient fetch error', async () => {
+    let now = 1_779_990_000_000;
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(codexPayload), { status: 200 }))
+      .mockRejectedValueOnce(new Error('network down'));
+    const usageFetcher = createAiUsageFetcher({
+      nowMs: () => now,
+      readText: vi.fn(async () =>
+        JSON.stringify({
+          tokens: { access_token: 'codex-access', refresh_token: 'codex-refresh', expires_at: Math.floor(now / 1000) + 3600 },
+        }),
+      ),
+      writeText: vi.fn(),
+      fetch,
+      homeDir: () => '/home/me',
+    });
+
+    const fresh = await usageFetcher.fetch('codex');
+    now += 61_000;
+    const stale = await usageFetcher.fetch('codex');
+
+    expect(fresh.status).toBe('ok');
+    expect(stale).toMatchObject({ provider: 'codex', status: 'stale', error: 'network down', session: { usedPercent: 42 } });
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
