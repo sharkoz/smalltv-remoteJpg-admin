@@ -9,6 +9,8 @@ export class HttpFetcher implements Fetcher {
       const outcome = await this.attempt(req);
       if (outcome.ok) return outcome;
       lastError = outcome.error ?? lastError;
+      // Don't retry rate-limit responses — backing off requires the caller, not a blind retry.
+      if (outcome.status === 429) break;
     }
     return { ok: false, error: lastError };
   }

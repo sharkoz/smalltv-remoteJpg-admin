@@ -8,6 +8,7 @@ vi.mock('../plugins/ai-usage/clients.js', async (importOriginal) => ({
 }));
 import { makeBricks } from '../src/plugins/brick.js';
 import type { RenderContext } from '../src/plugins/types.js';
+import { DEFAULT_THEME } from '../src/theme/palette.js';
 import { manifest, render } from '../plugins/ai-usage/index.js';
 import {
   aiUsageConfigSchema,
@@ -34,6 +35,7 @@ function testCtx(config: Record<string, unknown>): { ctx: RenderContext; logs: A
       data,
       now: new Date('2026-06-09T12:00:00Z'),
       brick: makeBricks(data),
+      theme: DEFAULT_THEME,
       log: { debug: mk('debug'), info: mk('info'), warn: mk('warn'), error: mk('error') },
     },
     logs,
@@ -91,7 +93,7 @@ describe('ai-usage config', () => {
     fetchProvider.mockReset();
     fetchProvider.mockResolvedValue(claudeUsage);
     const { ctx } = testCtx({ title: 'Usage Now', providers: ['claude'], mode: 'single' });
-    await expect(render(ctx)).resolves.toContain('Usage Now');
+    await expect(render(ctx)).resolves.toContain('Claude');
   });
 
   it('normalizes defaults for a minimal config', () => {
@@ -157,7 +159,7 @@ describe('ai-usage plugin render', () => {
 });
 
 describe('ai-usage renderer', () => {
-  it('renders a single provider layout with title, 5h, 7d, and percentages', () => {
+  it('renders a single provider layout with percentages', () => {
     const html = renderAiUsage(
       { providers: ['claude'], title: 'Usage Now', mode: 'single', showCredits: true, showReview: true, theme: 'dark' },
       [claudeUsage],
@@ -165,9 +167,7 @@ describe('ai-usage renderer', () => {
     );
 
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('Usage Now');
-    expect(html).toContain('5h');
-    expect(html).toContain('7d');
+    expect(html).toContain('Claude');
     expect(html).toContain('33%');
     expect(html).toContain('75%');
   });
@@ -179,17 +179,14 @@ describe('ai-usage renderer', () => {
       1_780_000_000,
     );
 
-    expect(html).toContain('AI Usage');
     expect(html).toContain('Claude');
     expect(html).toContain('Codex');
-    expect(html).toContain('5h 33%');
-    expect(html).toContain('7d 75%');
-    expect(html).toContain('5h 42%');
-    expect(html).toContain('7d 69%');
+    expect(html).toContain('33%');
+    expect(html).toContain('75%');
+    expect(html).toContain('42%');
+    expect(html).toContain('69%');
     expect(html).toContain('Credits 3');
-    expect(html).toContain('.cards{display:grid;grid-template-columns:1fr;gap:7px;flex:1;min-height:0}');
-    expect(html).toContain('.cards.dual{grid-template-columns:1fr 1fr}');
-    expect(html).not.toContain('.dual{display:flex');
+    expect(html).toContain('.cards{display:grid;grid-template-columns:1fr;');
   });
 
   it('renders zero Codex credits', () => {

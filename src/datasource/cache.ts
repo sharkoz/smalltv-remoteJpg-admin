@@ -18,9 +18,19 @@ export type Resolver = (template: string) => string;
  * reads the current value computing staleness from the injected clock. On a
  * failed fetch it keeps the last good value but flags it stale, so renders
  * degrade gracefully instead of going blank.
+ *
+ * Two-level caching prevents duplicate HTTP requests:
+ * - Per-dashboard entries (keyed by dashboardId::sourceId) store the last result per dashboard.
+ * - A shared URL-level store (keyed by resolved request) lets dashboards with the same URL
+ *   reuse a fresh result without making another HTTP call.
+ * - In-flight deduplication ensures concurrent refresh calls for the same URL share one request.
  */
 export class DataCache {
   private entries = new Map<string, Entry>();
+  /** URL-level shared results: keyed by requestKey, reused across dashboards. */
+  private sharedResults = new Map<string, DataResult>();
+  /** In-flight fetch promises keyed by requestKey — prevents duplicate concurrent requests. */
+  private inFlight = new Map<string, Promise<import('./types.js').FetchOutcome>>();
 
   constructor(
     private readonly fetcher: Fetcher,
@@ -59,16 +69,35 @@ export class DataCache {
     const key = this.key(dashboardId, decl.id);
     const prev = this.entries.get(key)?.result;
     const req = this.requestFor(decl, resolve);
-    const requestKey = this.requestKey(req);
-    const outcome = await this.fetcher.fetch(req);
+    const rk = this.requestKey(req);
+
+    // Reuse a shared result only when another dashboard already has a FRESHER result for the same URL.
+    // If this dashboard already has a result at the same timestamp, it's doing a scheduled refresh
+    // and should go through the normal fetch path (so failures are surfaced correctly).
+    const shared = this.sharedResults.get(rk);
+    const sharedIsFresher =
+      shared?.fetchedAt != null &&
+      (prev?.fetchedAt == null || shared.fetchedAt > prev.fetchedAt) &&
+      this.clock.nowMs() - shared.fetchedAt < decl.refreshIntervalMs;
+    if (sharedIsFresher) {
+      const changed = JSON.stringify(prev?.value) !== JSON.stringify(shared!.value);
+      this.entries.set(key, { result: shared!, refreshIntervalMs: decl.refreshIntervalMs, requestKey: rk });
+      return changed;
+    }
+
+    // Deduplicate concurrent requests: if another dashboard is already fetching the same URL, wait for it.
+    let fetchPromise = this.inFlight.get(rk);
+    if (!fetchPromise) {
+      fetchPromise = this.fetcher.fetch(req).finally(() => this.inFlight.delete(rk));
+      this.inFlight.set(rk, fetchPromise);
+    }
+    const outcome = await fetchPromise;
 
     if (outcome.ok) {
+      const result: DataResult = { ok: true, value: outcome.value, stale: false, fetchedAt: this.clock.nowMs() };
+      this.sharedResults.set(rk, result);
       const changed = JSON.stringify(prev?.value) !== JSON.stringify(outcome.value);
-      this.entries.set(key, {
-        result: { ok: true, value: outcome.value, stale: false, fetchedAt: this.clock.nowMs() },
-        refreshIntervalMs: decl.refreshIntervalMs,
-        requestKey,
-      });
+      this.entries.set(key, { result, refreshIntervalMs: decl.refreshIntervalMs, requestKey: rk });
       return changed;
     }
 
@@ -84,7 +113,7 @@ export class DataCache {
         fetchedAt: prev?.fetchedAt,
       },
       refreshIntervalMs: decl.refreshIntervalMs,
-      requestKey,
+      requestKey: rk,
     });
     // The visible value didn't change, but a fresh failure should surface the
     // stale marker once (re-render the first time it goes stale).
